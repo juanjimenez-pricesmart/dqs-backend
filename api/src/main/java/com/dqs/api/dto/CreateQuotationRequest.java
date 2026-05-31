@@ -11,33 +11,51 @@ import java.math.BigDecimal;
 @Data
 public class CreateQuotationRequest {
 
-    @JsonProperty("customer_name")
+    @NotBlank(message = "customer_name es requerido")
+    @JsonProperty("customerName")
     private String customerName;
 
-    @JsonProperty("customer_membresia")
+    @JsonProperty("customerMembership")
     private String customerMembership;
 
-    @JsonProperty("customer_business")
+    @JsonProperty("customerBusiness")
     private String customerBusiness;
 
-    @JsonProperty("store_id")
     @NotNull(message = "store_id es requerido")
+    @JsonProperty("storeId")
     private Integer storeId;
 
-    @JsonProperty("user_id")
     @NotNull(message = "user_id es requerido")
+    @JsonProperty("userId")
     private Integer userId;
 
-    private BigDecimal taxRate       = BigDecimal.ZERO;
+    @JsonProperty("taxRate")
+    private BigDecimal taxRate = BigDecimal.ZERO;
+
+    @JsonProperty("aplicarImpuestos")
     private Integer aplicarImpuestos = 1;
 
-    private BigDecimal grossAmount       = BigDecimal.ZERO;
-    private BigDecimal netAmount         = BigDecimal.ZERO;
-    private BigDecimal discount          = BigDecimal.ZERO;
-    private BigDecimal vatChargeRate     = BigDecimal.ZERO;
-    private BigDecimal vatCharge         = BigDecimal.ZERO;
-    private BigDecimal serviceChargeRate = BigDecimal.ZERO;
-    private BigDecimal serviceCharge     = BigDecimal.ZERO;
+    @JsonProperty("grossAmount")
+    private BigDecimal grossAmount = BigDecimal.ZERO;
 
-    private String dexpired; // "yyyy-MM-dd" — viene calculado desde DQS
+    @JsonProperty("netAmount")
+    private BigDecimal netAmount = BigDecimal.ZERO;
+
+    @JsonProperty("discount")
+    private BigDecimal discount = BigDecimal.ZERO;
+
+    @JsonProperty("vatChargeRate")
+    private BigDecimal vatChargeRate = BigDecimal.ZERO;
+
+    @JsonProperty("vatCharge")
+    private BigDecimal vatCharge = BigDecimal.ZERO;
+
+    @JsonProperty("serviceChargeRate")
+    private BigDecimal serviceChargeRate = BigDecimal.ZERO;
+
+    @JsonProperty("serviceCharge")
+    private BigDecimal serviceCharge = BigDecimal.ZERO;
+
+    @JsonProperty("dexpired")
+    private String dexpired;
 }
