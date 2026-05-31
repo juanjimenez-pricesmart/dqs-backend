@@ -1,6 +1,7 @@
 // dto/CreateQuotationRequest.java
 package com.dqs.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -10,15 +11,20 @@ import java.math.BigDecimal;
 @Data
 public class CreateQuotationRequest {
 
-    @NotBlank(message = "customer_name es requerido")
+    @JsonProperty("customer_name")
     private String customerName;
 
-    private String customerMembresia;
+    @JsonProperty("customer_membresia")
+    private String customerMembership;
+
+    @JsonProperty("customer_business")
     private String customerBusiness;
 
+    @JsonProperty("store_id")
     @NotNull(message = "store_id es requerido")
     private Integer storeId;
 
+    @JsonProperty("user_id")
     @NotNull(message = "user_id es requerido")
     private Integer userId;
 

@@ -27,7 +27,7 @@ public class Quotation {
     private String customerName;
 
     @Column(name = "customer_membresia", length = 50)
-    private String customerMembresia;
+    private String customerMembership;
 
     @Column(name = "customer_business", length = 200)
     private String customerBusiness;

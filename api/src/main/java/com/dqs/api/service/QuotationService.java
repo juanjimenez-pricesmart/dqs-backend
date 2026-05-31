@@ -32,7 +32,7 @@ public class QuotationService {
 
         Quotation quotation = Quotation.builder()
                 .customerName(request.getCustomerName())
-                .customerMembresia(request.getCustomerMembresia())
+                .customerMembership(request.getCustomerMembership())
                 .customerBusiness(request.getCustomerBusiness())
                 .storeId(request.getStoreId())
                 .userId(request.getUserId())
@@ -77,7 +77,7 @@ public class QuotationService {
         return QuotationResponse.builder()
                 .id(q.getId())
                 .customerName(q.getCustomerName())
-                .customerMembresia(q.getCustomerMembresia())
+                .customerMembership(q.getCustomerMembership())
                 .customerBusiness(q.getCustomerBusiness())
                 .storeId(q.getStoreId())
                 .userId(q.getUserId())

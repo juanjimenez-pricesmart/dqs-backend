@@ -14,7 +14,7 @@ public class QuotationResponse {
 
     private Long id;
     private String customerName;
-    private String customerMembresia;
+    private String customerMembership;
     private String customerBusiness;
     private Integer storeId;
     private Integer userId;
