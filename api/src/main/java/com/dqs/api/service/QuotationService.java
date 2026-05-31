@@ -2,6 +2,7 @@
 package com.dqs.api.service;
 
 import com.dqs.api.dto.CreateQuotationRequest;
+import com.dqs.api.dto.CloseQuotationRequest;
 import com.dqs.api.dto.QuotationItemRequest;
 import com.dqs.api.dto.QuotationItemResponse;
 import com.dqs.api.dto.QuotationResponse;
@@ -58,7 +59,7 @@ public class QuotationService {
                 .excent(0)
                 .statusId(1)       // borrador
                 .paidStatus(1)
-                .paymentMethodId(0)
+                .paymentMethodId("0")
                 .serviceId(0)
                 .dexpired(dexpired)
                 .build();
@@ -114,7 +115,7 @@ public class QuotationService {
         }
 
         quotation.setStatusId(2);  // 2 = enviada
-        quotation.setPaymentMethodId(request.getPaymentMethodId());
+        quotation.setPaymentMethodId(String.valueOf(request.getPaymentMethodId() != null ? request.getPaymentMethodId() : 0));
 
         Quotation saved = quotationRepository.save(quotation);
 
@@ -211,6 +212,31 @@ public class QuotationService {
                 .stream()
                 .map(this::toItemResponse)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public QuotationResponse closeQuotation(Long id, CloseQuotationRequest request) {
+
+        log.info("[QuotationService] closeQuotation id={} quoteTypeId={} paymentMethodId={}",
+                id, request.getQuoteTypeId(), request.getPaymentMethodId());
+
+        Quotation quotation = quotationRepository.findById(id)
+                .orElseThrow(() -> new QuotationNotFoundException(id));
+
+        if (quotation.getStatusId() != 1) {
+            throw new QuotationAlreadySubmittedException(id, quotation.getStatusId());
+        }
+
+        quotation.setStatusId(3);  // 3 = cerrada/venta
+        quotation.setQuoteTypeId(request.getQuoteTypeId());
+        quotation.setPaymentNumber(request.getPaymentNumber());
+        quotation.setPaymentMethodId(request.getPaymentMethodId());
+
+        Quotation saved = quotationRepository.save(quotation);
+
+        log.info("[QuotationService] quotation closed id={} status=3", saved.getId());
+
+        return toResponse(saved);
     }
 
     // ── Mapper ────────────────────────────────────────────────────────────

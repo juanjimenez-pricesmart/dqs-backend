@@ -80,8 +80,14 @@ public class Quotation {
     @Column(name = "paid_status")
     private Integer paidStatus;
 
-    @Column(name = "payment_method_id")
-    private Integer paymentMethodId;
+    @Column(name = "quote_type_id")
+    private Integer quoteTypeId;
+
+    @Column(name = "payment_number", length = 100)
+    private String paymentNumber;
+
+    @Column(name = "payment_method_id", length = 20)
+    private String paymentMethodId;
 
     @Column(name = "service_id")
     private Integer serviceId;

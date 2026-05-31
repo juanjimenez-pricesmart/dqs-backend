@@ -2,6 +2,7 @@
 package com.dqs.api.controller;
 
 import com.dqs.api.dto.CreateQuotationRequest;
+import com.dqs.api.dto.CloseQuotationRequest;
 import com.dqs.api.dto.QuotationItemRequest;
 import com.dqs.api.dto.QuotationItemResponse;
 import com.dqs.api.dto.QuotationResponse;
@@ -66,5 +67,15 @@ public class QuotationController {
     @GetMapping("/{id}/items")
     public ResponseEntity<List<QuotationItemResponse>> getItems(@PathVariable Long id) {
         return ResponseEntity.ok(quotationService.getItems(id));
+    }
+
+    @PatchMapping("/{id}/close")
+    public ResponseEntity<QuotationResponse> close(
+            @PathVariable Long id,
+            @Valid @RequestBody CloseQuotationRequest request) {
+
+        log.info("[QuotationController] PATCH /api/v1/quotations/{}/close", id);
+
+        return ResponseEntity.ok(quotationService.closeQuotation(id, request));
     }
 }
