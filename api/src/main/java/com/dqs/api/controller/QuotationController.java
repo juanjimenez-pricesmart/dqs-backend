@@ -2,6 +2,8 @@
 package com.dqs.api.controller;
 
 import com.dqs.api.dto.CreateQuotationRequest;
+import com.dqs.api.dto.QuotationItemRequest;
+import com.dqs.api.dto.QuotationItemResponse;
 import com.dqs.api.dto.QuotationResponse;
 import com.dqs.api.dto.SubmitQuotationRequest;
 import com.dqs.api.service.QuotationService;
@@ -11,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.util.List;
 
 @Slf4j
 @RestController
@@ -45,5 +48,23 @@ public class QuotationController {
         log.info("[QuotationController] POST /api/v1/quotations/{}/submit", id);
 
         return ResponseEntity.ok(quotationService.submitQuotation(id, request));
+    }
+
+    @PostMapping("/{id}/items")
+    public ResponseEntity<QuotationItemResponse> saveItem(
+            @PathVariable Long id,
+            @Valid @RequestBody QuotationItemRequest request) {
+
+        log.info("[QuotationController] POST /api/v1/quotations/{}/items product_id={}",
+                id, request.getProductId());
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(quotationService.saveItem(id, request));
+    }
+
+    @GetMapping("/{id}/items")
+    public ResponseEntity<List<QuotationItemResponse>> getItems(@PathVariable Long id) {
+        return ResponseEntity.ok(quotationService.getItems(id));
     }
 }
