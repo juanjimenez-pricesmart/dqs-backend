@@ -92,6 +92,9 @@ public class Quotation {
     @Column(name = "service_id")
     private Integer serviceId;
 
+    @Column(name = "quote_no", length = 50)
+    private String quoteNo;
+
     // --- Fechas ---
     @CreationTimestamp
     @Column(name = "date_time", updatable = false)

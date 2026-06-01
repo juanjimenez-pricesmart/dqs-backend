@@ -6,6 +6,7 @@ import com.dqs.api.dto.CloseQuotationRequest;
 import com.dqs.api.dto.QuotationItemRequest;
 import com.dqs.api.dto.QuotationItemResponse;
 import com.dqs.api.dto.QuotationResponse;
+import com.dqs.api.dto.SendToOmsRequest;
 import com.dqs.api.dto.SubmitQuotationRequest;
 import com.dqs.api.service.QuotationService;
 import jakarta.validation.Valid;
@@ -77,5 +78,16 @@ public class QuotationController {
         log.info("[QuotationController] PATCH /api/v1/quotations/{}/close", id);
 
         return ResponseEntity.ok(quotationService.closeQuotation(id, request));
+    }
+
+    @PostMapping("/{id}/send-to-oms")
+    public ResponseEntity<String> sendToOms(
+            @PathVariable Long id,
+            @Valid @RequestBody SendToOmsRequest request) {
+
+        log.info("[QuotationController] POST /api/v1/quotations/{}/send-to-oms", id);
+
+        String result = quotationService.sendToOms(id, request);
+        return ResponseEntity.ok(result);
     }
 }

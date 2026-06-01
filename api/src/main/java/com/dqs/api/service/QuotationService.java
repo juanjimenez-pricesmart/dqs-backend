@@ -23,6 +23,16 @@ import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.stream.Collectors;
+import com.dqs.api.service.OmsPayloadBuilder;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import org.springframework.beans.factory.annotation.Value;
+import java.io.OutputStream;
+import com.dqs.api.dto.SendToOmsRequest;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Slf4j
 @Service
@@ -31,6 +41,21 @@ public class QuotationService {
 
     private final QuotationRepository quotationRepository;
     private final QuotationItemRepository quotationItemRepository;
+    private final OmsService omsService;
+    private final OmsPayloadBuilder omsPayloadBuilder;
+    private final ObjectMapper objectMapper;
+
+    @Value("${idp.base-url}")
+    private String idpBaseUrl;
+
+    @Value("${idp.client-id}")
+    private String clientId;
+
+    @Value("${idp.client-secret}")
+    private String clientSecret;
+
+    @Value("${dqs.base-url}")
+    private String dqsBaseUrl;
 
     @Transactional
     public QuotationResponse createQuotation(CreateQuotationRequest request) {
@@ -237,6 +262,97 @@ public class QuotationService {
         log.info("[QuotationService] quotation closed id={} status=3", saved.getId());
 
         return toResponse(saved);
+    }
+
+    @Transactional
+    public String sendToOms(Long id, SendToOmsRequest request) {
+
+        log.info("[QuotationService] sendToOms id={}", id);
+
+        Quotation quotation = quotationRepository.findById(id)
+                .orElseThrow(() -> new QuotationNotFoundException(id));
+
+        if (quotation.getStatusId() != 3) {
+            throw new IllegalStateException(
+                "Quotation " + id + " must be closed (status=3). Current: " + quotation.getStatusId());
+        }
+
+        List<QuotationItem> items = quotationItemRepository
+                .findByQuotationIdOrderByProductIdAsc(id);
+
+        // Contexto directo desde DB
+        Map<String, Object> context = omsService.getQuotationContext(
+                id,
+                quotation.getStoreId(),
+                quotation.getCustomerMembership(),
+                quotation.getUserId());
+
+        // Construir payload
+        Map<String, Object> payload = omsPayloadBuilder.build(
+                quotation, items, context, request.getVentanas());
+
+        // Token OAuth2 directo del IDP
+        String token = getOmsToken();
+
+        Map<String, Object> club = (Map<String, Object>) context.get("club");
+        String paisIso2 = club != null ? (String) club.get("pais_iso2") : "CR";
+
+        String omsResponse = omsService.sendPayload(payload, paisIso2, token);
+
+        // Evaluar respuesta
+        try {
+            Map<String, Object> resp = objectMapper.readValue(omsResponse, Map.class);
+
+            if (resp.containsKey("orderId")) {
+                String orderId = resp.get("orderId").toString();
+                quotation.setStatusId(2);
+                quotation.setQuoteNo(orderId);
+                quotationRepository.save(quotation);
+                log.info("[QuotationService] OMS OK orderId={} quotation_id={}", orderId, id);
+            } else {
+                log.warn("[QuotationService] OMS rejected quotation_id={} response={}", id, omsResponse);
+            }
+        } catch (Exception e) {
+            log.error("[QuotationService] Error parsing OMS response: {}", e.getMessage());
+        }
+
+        return omsResponse;
+    }
+
+    private String getOmsToken() {
+        String url = idpBaseUrl + "/auth/realms/PriceSmart/protocol/openid-connect/token";
+
+        log.info("[QuotationService] getOmsToken url={}", url);
+
+        try {
+            String body = "grant_type=client_credentials"
+                    + "&client_id=" + clientId
+                    + "&client_secret=" + clientSecret;
+
+            HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+            conn.setRequestMethod("POST");
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+            conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(body.getBytes(StandardCharsets.UTF_8));
+            }
+
+            String response = new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            conn.disconnect();
+
+            Map<String, Object> resp = objectMapper.readValue(response, Map.class);
+            String token = resp.getOrDefault("access_token", "").toString();
+
+            log.info("[QuotationService] token obtained length={}", token.length());
+            return token;
+
+        } catch (Exception e) {
+            log.error("[QuotationService] Error getting OMS token: {}", e.getMessage());
+            throw new RuntimeException("Error obteniendo token OMS: " + e.getMessage());
+        }
     }
 
     // ── Mapper ────────────────────────────────────────────────────────────
