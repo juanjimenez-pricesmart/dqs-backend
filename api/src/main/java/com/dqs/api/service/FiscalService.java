@@ -33,6 +33,9 @@ public class FiscalService {
     @Value("${gosocket.country-id}")
     private String countryId;
 
+    @Value("${gosocket.identification-type}")
+    private String defaultIdentificationType;
+
     public FiscalService(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
@@ -47,9 +50,12 @@ public class FiscalService {
     public Map<String, Object> validateIdentification(String receiverCode, String identificationType) {
         log.info("[FiscalService] validateIdentification code={} type={}", receiverCode, identificationType);
 
+        String resolvedType = (identificationType != null && !identificationType.isBlank())
+                ? identificationType : defaultIdentificationType;
+
         String path = "/api/v1/Account/GetAccount"
                 + "?AccountCode=" + accountCode
-                + "&identificationType=" + identificationType
+                + "&identificationType=" + resolvedType
                 + "&receiverCode=" + receiverCode
                 + "&countryId=" + countryId;
 
