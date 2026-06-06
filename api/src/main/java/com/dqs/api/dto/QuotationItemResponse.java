@@ -1,7 +1,5 @@
-// dto/QuotationItemResponse.java
 package com.dqs.api.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Data;
 import java.math.BigDecimal;
@@ -10,18 +8,28 @@ import java.math.BigDecimal;
 @Builder
 public class QuotationItemResponse {
 
+    // core
     private Long id;
     private Long quotationId;
     private String productId;
-    private String description;
     private BigDecimal qty;
     private BigDecimal rate;
     private BigDecimal signPrice;
     private BigDecimal amount;
+    private String icomments;
+    private Integer includepic;
+    private Integer variacion;
+
+    // taxes
     private BigDecimal taxPorcentaje;
     private BigDecimal taxFactor;
     private BigDecimal taxAmount;
     private BigDecimal taxIco;
+    private BigDecimal excentPorcentaje;
+    private BigDecimal excentAmount;
+
+    // product snapshot
+    private String description;
     private BigDecimal cuEa;
     private BigDecimal pl;
     private BigDecimal weightEa;

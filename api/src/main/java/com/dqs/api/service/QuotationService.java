@@ -1,38 +1,28 @@
-// service/QuotationService.java
 package com.dqs.api.service;
 
-import com.dqs.api.dto.CreateQuotationRequest;
-import com.dqs.api.dto.CloseQuotationRequest;
-import com.dqs.api.dto.QuotationItemRequest;
-import com.dqs.api.dto.QuotationItemResponse;
-import com.dqs.api.dto.QuotationResponse;
-import com.dqs.api.dto.SubmitQuotationRequest;
+import com.dqs.api.dto.*;
 import com.dqs.api.exception.QuotationAlreadySubmittedException;
 import com.dqs.api.exception.QuotationNotFoundException;
-import com.dqs.api.model.Quotation;
-import com.dqs.api.model.QuotationItem;
+import com.dqs.api.model.*;
 import com.dqs.api.repository.QuotationItemRepository;
 import com.dqs.api.repository.QuotationRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.io.OutputStream;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
-import java.util.List;
-import java.util.stream.Collectors;
-import com.dqs.api.service.OmsPayloadBuilder;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.util.List;
 import java.util.Map;
-import org.springframework.beans.factory.annotation.Value;
-import java.io.OutputStream;
-import com.dqs.api.dto.SendToOmsRequest;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -57,136 +47,88 @@ public class QuotationService {
     @Value("${dqs.base-url}")
     private String dqsBaseUrl;
 
+    // ── Create ────────────────────────────────────────────────────────────
+
     @Transactional
-    public QuotationResponse createQuotation(CreateQuotationRequest request) {
-
-        log.info("[QuotationService] createQuotation store_id={} user_id={}",
-                request.getStoreId(), request.getUserId());
-
-        LocalDate dexpired = parseExpiry(request.getDexpired());
+    public QuotationResponse createQuotation(CreateQuotationRequest req) {
+        log.info("[QuotationService] createQuotation store_id={} user_id={}", req.getStoreId(), req.getUserId());
 
         Quotation quotation = Quotation.builder()
-                .customerName(request.getCustomerName())
-                .customerMembership(request.getCustomerMembership())
-                .customerBusiness(request.getCustomerBusiness())
-                .storeId(request.getStoreId())
-                .userId(request.getUserId())
-                .taxRate(request.getTaxRate())
-                .aplicarImpuestos(request.getAplicarImpuestos())
-                .grossAmount(request.getGrossAmount())
-                .netAmount(request.getNetAmount())
-                .discount(request.getDiscount())
-                .vatChargeRate(request.getVatChargeRate())
-                .vatCharge(request.getVatCharge())
-                .serviceChargeRate(request.getServiceChargeRate())
-                .serviceCharge(request.getServiceCharge())
-                .deliveryAmount(java.math.BigDecimal.ZERO)
-                .excent(0)
-                .statusId(1)       // borrador
-                .paidStatus(1)
-                .paymentMethodId("0")
-                .serviceId(0)
-                .dexpired(dexpired)
+                .storeId(req.getStoreId())
+                .userId(req.getUserId())
+                .statusId(1)
+                .dexpired(parseExpiry(req.getDexpired()))
                 .build();
 
+        QuotationCustomer customer = QuotationCustomer.builder()
+                .quotation(quotation)
+                .customerName(req.getCustomerName())
+                .customerMembership(req.getCustomerMembership())
+                .customerBusiness(req.getCustomerBusiness())
+                .build();
+
+        QuotationTotals totals = QuotationTotals.builder()
+                .quotation(quotation)
+                .taxRate(req.getTaxRate())
+                .aplicarImpuestos(req.getAplicarImpuestos())
+                .excent(0)
+                .grossAmount(req.getGrossAmount())
+                .netAmount(req.getNetAmount())
+                .discount(req.getDiscount())
+                .vatChargeRate(req.getVatChargeRate())
+                .vatCharge(req.getVatCharge())
+                .serviceChargeRate(req.getServiceChargeRate())
+                .serviceCharge(req.getServiceCharge())
+                .deliveryAmount(BigDecimal.ZERO)
+                .build();
+
+        quotation.setCustomer(customer);
+        quotation.setTotals(totals);
+
         Quotation saved = quotationRepository.save(quotation);
-
         log.info("[QuotationService] quotation created id={}", saved.getId());
-
         return toResponse(saved);
     }
 
-    private LocalDate parseExpiry(String dexpired) {
-        if (dexpired == null || dexpired.isBlank()) {
-            return LocalDate.now().plusDays(21);
-        }
-        try {
-            return LocalDate.parse(dexpired);
-        } catch (DateTimeParseException e) {
-            log.warn("[QuotationService] dexpired inválido '{}', usando +21 días", dexpired);
-            return LocalDate.now().plusDays(21);
-        }
+    // ── Get ───────────────────────────────────────────────────────────────
+
+    public QuotationResponse getById(Long id) {
+        return toResponse(findOrThrow(id));
     }
 
-    private QuotationResponse toResponse(Quotation q) {
-        return QuotationResponse.builder()
-                .id(q.getId())
-                .customerName(q.getCustomerName())
-                .customerMembership(q.getCustomerMembership())
-                .customerBusiness(q.getCustomerBusiness())
-                .storeId(q.getStoreId())
-                .userId(q.getUserId())
-                .taxRate(q.getTaxRate())
-                .aplicarImpuestos(q.getAplicarImpuestos())
-                .grossAmount(q.getGrossAmount())
-                .netAmount(q.getNetAmount())
-                .statusId(q.getStatusId())
-                .dateTime(q.getDateTime())
-                .dexpired(q.getDexpired())
-                .build();
-    }
+    // ── Submit ────────────────────────────────────────────────────────────
 
     @Transactional
-    public QuotationResponse submitQuotation(Long id, SubmitQuotationRequest request) {
+    public QuotationResponse submitQuotation(Long id, SubmitQuotationRequest req) {
+        log.info("[QuotationService] submitQuotation id={} submitted_by={}", id, req.getSubmittedBy());
 
-        log.info("[QuotationService] submitQuotation id={} submitted_by={}",
-                id, request.getSubmittedBy());
-
-        Quotation quotation = quotationRepository.findById(id)
-                .orElseThrow(() -> new QuotationNotFoundException(id));
-
+        Quotation quotation = findOrThrow(id);
         if (quotation.getStatusId() != 1) {
             throw new QuotationAlreadySubmittedException(id, quotation.getStatusId());
         }
 
-        quotation.setStatusId(2);  // 2 = enviada
-        quotation.setPaymentMethodId(String.valueOf(request.getPaymentMethodId() != null ? request.getPaymentMethodId() : 0));
+        quotation.setStatusId(2);
 
-        Quotation saved = quotationRepository.save(quotation);
+        String methodId = req.getPaymentMethodId() != null ? String.valueOf(req.getPaymentMethodId()) : "0";
+        ensurePayment(quotation).setPaymentMethodId(methodId);
 
-        log.info("[QuotationService] quotation submitted id={} status=2", saved.getId());
-
-        return toResponse(saved);
+        return toResponse(quotationRepository.save(quotation));
     }
 
-    // GET por id — ahora lo implementamos también
-    public QuotationResponse getById(Long id) {
-        Quotation quotation = quotationRepository.findById(id)
-                .orElseThrow(() -> new QuotationNotFoundException(id));
-        return toResponse(quotation);
-    }
-
-    // ── Guardar item ──────────────────────────────────────────────────────
+    // ── Save item ─────────────────────────────────────────────────────────
 
     @Transactional
-    public QuotationItemResponse saveItem(Long quotationId, QuotationItemRequest request) {
+    public QuotationItemResponse saveItem(Long quotationId, QuotationItemRequest req) {
+        log.info("[QuotationService] saveItem quotation_id={} product_id={}", quotationId, req.getProductId());
 
-        log.info("[QuotationService] saveItem quotation_id={} product_id={}",
-                quotationId, request.getProductId());
+        Quotation quotation = findOrThrow(quotationId);
 
-        // Verificar que la cotización existe
-        quotationRepository.findById(quotationId)
-                .orElseThrow(() -> new QuotationNotFoundException(quotationId));
-
-        // Si el item ya existe, actualizar qty; si no, insertar
-        QuotationItem item = quotationItemRepository
-                .findByQuotationIdAndProductId(quotationId, request.getProductId())
-                .orElse(QuotationItem.builder()
-                        .quotationId(quotationId)
-                        .productId(request.getProductId())
-                        .excentPorcentaje(BigDecimal.ZERO)
-                        .excentAmount(BigDecimal.ZERO)
-                        .icomments("")
-                        .includepic(0)
-                        .variacion(0)
-                        .build());
-
-        // Calcular amount = qty × signPrice
-        BigDecimal qty       = request.getQty()       != null ? request.getQty()       : BigDecimal.ZERO;
-        BigDecimal signPrice = request.getSignPrice()  != null ? request.getSignPrice() : BigDecimal.ZERO;
-        BigDecimal taxFactor = request.getTaxFactor()  != null ? request.getTaxFactor() : BigDecimal.ZERO;
-        BigDecimal pl        = request.getPl()         != null ? request.getPl()        : BigDecimal.ONE;
-        BigDecimal weightEa  = request.getWeightEa()   != null ? request.getWeightEa()  : BigDecimal.ZERO;
+        BigDecimal qty       = coalesce(req.getQty(),       BigDecimal.ZERO);
+        BigDecimal signPrice = coalesce(req.getSignPrice(),  BigDecimal.ZERO);
+        BigDecimal taxFactor = coalesce(req.getTaxFactor(),  BigDecimal.ZERO);
+        BigDecimal pl        = coalesce(req.getPl(),         BigDecimal.ONE);
+        BigDecimal weightEa  = coalesce(req.getWeightEa(),   BigDecimal.ZERO);
+        BigDecimal taxIco    = coalesce(req.getTaxIco(),     BigDecimal.ZERO);
 
         BigDecimal amount       = qty.multiply(signPrice).setScale(4, java.math.RoundingMode.HALF_UP);
         BigDecimal taxAmount    = qty.multiply(taxFactor).setScale(4, java.math.RoundingMode.HALF_UP);
@@ -195,118 +137,118 @@ public class QuotationService {
                 ? qty.divide(pl, 4, java.math.RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
 
-        // Mapear campos
-        item.setDescription(request.getDescription());
+        QuotationItem item = quotationItemRepository
+                .findByQuotation_IdAndProductId(quotationId, req.getProductId())
+                .orElseGet(() -> {
+                    QuotationItem newItem = QuotationItem.builder()
+                            .quotation(quotation)
+                            .productId(req.getProductId())
+                            .icomments("")
+                            .includepic(0)
+                            .variacion(0)
+                            .build();
+                    newItem.setTaxes(QuotationItemTaxes.builder().item(newItem).build());
+                    newItem.setProduct(QuotationItemProduct.builder().item(newItem).build());
+                    return newItem;
+                });
+
         item.setQty(qty);
-        item.setRate(request.getRate());
+        item.setRate(req.getRate());
         item.setSignPrice(signPrice);
         item.setAmount(amount);
-        item.setTaxPorcentaje(request.getTaxPorcentaje());
-        item.setTaxFactor(taxFactor);
-        item.setTaxAmount(taxAmount);
-        item.setTaxIco(request.getTaxIco() != null ? request.getTaxIco() : BigDecimal.ZERO);
-        item.setCuEa(request.getCuEa());
-        item.setPl(pl);
-        item.setWeightEa(weightEa);
-        item.setWeightResult(weightResult);
-        item.setPalletxqty(palletxqty);
-        item.setOnhand(request.getOnhand());
-        item.setSoldByWeight(request.getSoldByWeight());
-        item.setRecipe(request.getRecipe());
-        item.setStorageType(request.getStorageType());
-        item.setPicture1(request.getPicture1());
-        item.setDepartment(request.getDepartment());
-        item.setCategory(request.getCategory());
+
+        QuotationItemTaxes taxes = item.getTaxes();
+        taxes.setTaxPorcentaje(req.getTaxPorcentaje());
+        taxes.setTaxFactor(taxFactor);
+        taxes.setTaxAmount(taxAmount);
+        taxes.setTaxIco(taxIco);
+        taxes.setExcentPorcentaje(BigDecimal.ZERO);
+        taxes.setExcentAmount(BigDecimal.ZERO);
+
+        QuotationItemProduct product = item.getProduct();
+        product.setDescription(req.getDescription());
+        product.setCuEa(req.getCuEa());
+        product.setPl(pl);
+        product.setWeightEa(weightEa);
+        product.setWeightResult(weightResult);
+        product.setPalletxqty(palletxqty);
+        product.setOnhand(req.getOnhand());
+        product.setSoldByWeight(req.getSoldByWeight());
+        product.setRecipe(req.getRecipe());
+        product.setStorageType(req.getStorageType());
+        product.setPicture1(req.getPicture1());
+        product.setDepartment(req.getDepartment());
+        product.setCategory(req.getCategory());
 
         QuotationItem saved = quotationItemRepository.save(item);
-
-        log.info("[QuotationService] item saved id={} quotation_id={} product_id={}",
-                saved.getId(), quotationId, saved.getProductId());
-
+        log.info("[QuotationService] item saved id={} quotation_id={} product_id={}", saved.getId(), quotationId, saved.getProductId());
         return toItemResponse(saved);
     }
 
-    // ── Listar items ──────────────────────────────────────────────────────
+    // ── Get items ─────────────────────────────────────────────────────────
 
     public List<QuotationItemResponse> getItems(Long quotationId) {
-        quotationRepository.findById(quotationId)
-                .orElseThrow(() -> new QuotationNotFoundException(quotationId));
-
+        findOrThrow(quotationId);
         return quotationItemRepository
-                .findByQuotationIdOrderByProductIdAsc(quotationId)
+                .findByQuotation_IdOrderByProductIdAsc(quotationId)
                 .stream()
                 .map(this::toItemResponse)
                 .collect(Collectors.toList());
     }
 
+    // ── Close ─────────────────────────────────────────────────────────────
+
     @Transactional
-    public QuotationResponse closeQuotation(Long id, CloseQuotationRequest request) {
+    public QuotationResponse closeQuotation(Long id, CloseQuotationRequest req) {
+        log.info("[QuotationService] closeQuotation id={} quoteTypeId={} paymentMethodId={}", id, req.getQuoteTypeId(), req.getPaymentMethodId());
 
-        log.info("[QuotationService] closeQuotation id={} quoteTypeId={} paymentMethodId={}",
-                id, request.getQuoteTypeId(), request.getPaymentMethodId());
-
-        Quotation quotation = quotationRepository.findById(id)
-                .orElseThrow(() -> new QuotationNotFoundException(id));
-
+        Quotation quotation = findOrThrow(id);
         if (quotation.getStatusId() != 1) {
             throw new QuotationAlreadySubmittedException(id, quotation.getStatusId());
         }
 
-        quotation.setStatusId(3);  // 3 = cerrada/venta
-        quotation.setQuoteTypeId(request.getQuoteTypeId());
-        quotation.setPaymentNumber(request.getPaymentNumber());
-        quotation.setPaymentMethodId(request.getPaymentMethodId());
+        quotation.setStatusId(3);
 
-        Quotation saved = quotationRepository.save(quotation);
+        QuotationPayment payment = ensurePayment(quotation);
+        payment.setQuoteTypeId(req.getQuoteTypeId());
+        payment.setPaymentNumber(req.getPaymentNumber());
+        payment.setPaymentMethodId(req.getPaymentMethodId());
 
-        log.info("[QuotationService] quotation closed id={} status=3", saved.getId());
-
-        return toResponse(saved);
+        return toResponse(quotationRepository.save(quotation));
     }
 
-    @Transactional
-    public String sendToOms(Long id, SendToOmsRequest request) {
+    // ── Send to OMS ───────────────────────────────────────────────────────
 
+    @Transactional
+    public String sendToOms(Long id, SendToOmsRequest req) {
         log.info("[QuotationService] sendToOms id={}", id);
 
-        Quotation quotation = quotationRepository.findById(id)
-                .orElseThrow(() -> new QuotationNotFoundException(id));
-
+        Quotation quotation = findOrThrow(id);
         if (quotation.getStatusId() != 3) {
             throw new IllegalStateException(
-                "Quotation " + id + " must be closed (status=3). Current: " + quotation.getStatusId());
+                    "Quotation " + id + " must be closed (status=3). Current: " + quotation.getStatusId());
         }
 
-        List<QuotationItem> items = quotationItemRepository
-                .findByQuotationIdOrderByProductIdAsc(id);
+        List<QuotationItem> items = quotationItemRepository.findByQuotation_IdOrderByProductIdAsc(id);
 
-        // Contexto directo desde DB
-        Map<String, Object> context = omsService.getQuotationContext(
-                id,
-                quotation.getStoreId(),
-                quotation.getCustomerMembership(),
-                quotation.getUserId());
+        String membership = quotation.getCustomer() != null ? quotation.getCustomer().getCustomerMembership() : null;
+        Map<String, Object> context = omsService.getQuotationContext(id, quotation.getStoreId(), membership, quotation.getUserId());
+        Map<String, Object> payload = omsPayloadBuilder.build(quotation, items, context, req.getVentanas());
 
-        // Construir payload
-        Map<String, Object> payload = omsPayloadBuilder.build(
-                quotation, items, context, request.getVentanas());
-
-        // Token OAuth2 directo del IDP
         String token = getOmsToken();
 
-        Map<String, Object> club = (Map<String, Object>) context.get("club");
-        String paisIso2 = club != null ? (String) club.get("pais_iso2") : "CR";
+        Map<String, Object> club = castMap(context.get("club"));
+        String paisIso2 = club != null ? str(club.get("pais_iso2"), "CR") : "CR";
 
         String omsResponse = omsService.sendPayload(payload, paisIso2, token);
 
-        // Evaluar respuesta
         try {
+            @SuppressWarnings("unchecked")
             Map<String, Object> resp = objectMapper.readValue(omsResponse, Map.class);
-
             if (resp.containsKey("orderId")) {
                 String orderId = resp.get("orderId").toString();
                 quotation.setStatusId(2);
-                quotation.setQuoteNo(orderId);
+                ensurePayment(quotation).setQuoteNo(orderId);
                 quotationRepository.save(quotation);
                 log.info("[QuotationService] OMS OK orderId={} quotation_id={}", orderId, id);
             } else {
@@ -319,15 +261,148 @@ public class QuotationService {
         return omsResponse;
     }
 
+    // ── Helpers ───────────────────────────────────────────────────────────
+
+    private Quotation findOrThrow(Long id) {
+        return quotationRepository.findById(id).orElseThrow(() -> new QuotationNotFoundException(id));
+    }
+
+    private QuotationPayment ensurePayment(Quotation quotation) {
+        if (quotation.getPayment() == null) {
+            QuotationPayment payment = QuotationPayment.builder()
+                    .quotation(quotation)
+                    .paidStatus(1)
+                    .serviceId(0)
+                    .paymentMethodId("0")
+                    .build();
+            quotation.setPayment(payment);
+        }
+        return quotation.getPayment();
+    }
+
+    private LocalDate parseExpiry(String dexpired) {
+        if (dexpired == null || dexpired.isBlank()) return LocalDate.now().plusDays(21);
+        try {
+            return LocalDate.parse(dexpired);
+        } catch (DateTimeParseException e) {
+            log.warn("[QuotationService] dexpired inválido '{}', usando +21 días", dexpired);
+            return LocalDate.now().plusDays(21);
+        }
+    }
+
+    private BigDecimal coalesce(BigDecimal value, BigDecimal fallback) {
+        return value != null ? value : fallback;
+    }
+
+    private String str(Object val, String def) {
+        if (val == null) return def;
+        String s = val.toString().trim();
+        return s.isEmpty() ? def : s;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> castMap(Object val) {
+        return val instanceof Map ? (Map<String, Object>) val : null;
+    }
+
+    // ── Mappers ───────────────────────────────────────────────────────────
+
+    private QuotationResponse toResponse(Quotation q) {
+        QuotationCustomer c = q.getCustomer();
+        QuotationTotals   t = q.getTotals();
+        QuotationPayment  p = q.getPayment();
+
+        QuotationResponse.QuotationResponseBuilder b = QuotationResponse.builder()
+                .id(q.getId())
+                .storeId(q.getStoreId())
+                .userId(q.getUserId())
+                .statusId(q.getStatusId())
+                .dateTime(q.getDateTime())
+                .dexpired(q.getDexpired());
+
+        if (c != null) {
+            b.customerName(c.getCustomerName())
+             .customerMembership(c.getCustomerMembership())
+             .customerBusiness(c.getCustomerBusiness());
+        }
+
+        if (t != null) {
+            b.taxRate(t.getTaxRate())
+             .aplicarImpuestos(t.getAplicarImpuestos())
+             .excent(t.getExcent())
+             .grossAmount(t.getGrossAmount())
+             .netAmount(t.getNetAmount())
+             .discount(t.getDiscount())
+             .vatChargeRate(t.getVatChargeRate())
+             .vatCharge(t.getVatCharge())
+             .serviceChargeRate(t.getServiceChargeRate())
+             .serviceCharge(t.getServiceCharge())
+             .deliveryAmount(t.getDeliveryAmount());
+        }
+
+        if (p != null) {
+            b.paidStatus(p.getPaidStatus())
+             .quoteTypeId(p.getQuoteTypeId())
+             .paymentNumber(p.getPaymentNumber())
+             .paymentMethodId(p.getPaymentMethodId())
+             .serviceId(p.getServiceId())
+             .quoteNo(p.getQuoteNo());
+        }
+
+        return b.build();
+    }
+
+    private QuotationItemResponse toItemResponse(QuotationItem i) {
+        QuotationItemTaxes   tx = i.getTaxes();
+        QuotationItemProduct pr = i.getProduct();
+
+        QuotationItemResponse.QuotationItemResponseBuilder b = QuotationItemResponse.builder()
+                .id(i.getId())
+                .quotationId(i.getQuotation().getId())
+                .productId(i.getProductId())
+                .qty(i.getQty())
+                .rate(i.getRate())
+                .signPrice(i.getSignPrice())
+                .amount(i.getAmount())
+                .icomments(i.getIcomments())
+                .includepic(i.getIncludepic())
+                .variacion(i.getVariacion());
+
+        if (tx != null) {
+            b.taxPorcentaje(tx.getTaxPorcentaje())
+             .taxFactor(tx.getTaxFactor())
+             .taxAmount(tx.getTaxAmount())
+             .taxIco(tx.getTaxIco())
+             .excentPorcentaje(tx.getExcentPorcentaje())
+             .excentAmount(tx.getExcentAmount());
+        }
+
+        if (pr != null) {
+            b.description(pr.getDescription())
+             .cuEa(pr.getCuEa())
+             .pl(pr.getPl())
+             .weightEa(pr.getWeightEa())
+             .weightResult(pr.getWeightResult())
+             .palletxqty(pr.getPalletxqty())
+             .onhand(pr.getOnhand())
+             .soldByWeight(pr.getSoldByWeight())
+             .recipe(pr.getRecipe())
+             .storageType(pr.getStorageType())
+             .picture1(pr.getPicture1())
+             .department(pr.getDepartment())
+             .category(pr.getCategory());
+        }
+
+        return b.build();
+    }
+
+    // ── OAuth2 token ──────────────────────────────────────────────────────
+
     private String getOmsToken() {
         String url = idpBaseUrl + "/auth/realms/PriceSmart/protocol/openid-connect/token";
-
         log.info("[QuotationService] getOmsToken url={}", url);
-
         try {
-            String body = "grant_type=client_credentials"
-                    + "&client_id=" + clientId
-                    + "&client_secret=" + clientSecret;
+            String body = "grant_type=client_credentials&client_id=" + clientId + "&client_secret=" + clientSecret;
 
             HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
             conn.setRequestMethod("POST");
@@ -343,9 +418,9 @@ public class QuotationService {
             String response = new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             conn.disconnect();
 
+            @SuppressWarnings("unchecked")
             Map<String, Object> resp = objectMapper.readValue(response, Map.class);
             String token = resp.getOrDefault("access_token", "").toString();
-
             log.info("[QuotationService] token obtained length={}", token.length());
             return token;
 
@@ -353,36 +428,5 @@ public class QuotationService {
             log.error("[QuotationService] Error getting OMS token: {}", e.getMessage());
             throw new RuntimeException("Error obteniendo token OMS: " + e.getMessage());
         }
-    }
-
-    // ── Mapper ────────────────────────────────────────────────────────────
-
-    private QuotationItemResponse toItemResponse(QuotationItem i) {
-        return QuotationItemResponse.builder()
-                .id(i.getId())
-                .quotationId(i.getQuotationId())
-                .productId(i.getProductId())
-                .description(i.getDescription())
-                .qty(i.getQty())
-                .rate(i.getRate())
-                .signPrice(i.getSignPrice())
-                .amount(i.getAmount())
-                .taxPorcentaje(i.getTaxPorcentaje())
-                .taxFactor(i.getTaxFactor())
-                .taxAmount(i.getTaxAmount())
-                .taxIco(i.getTaxIco())
-                .cuEa(i.getCuEa())
-                .pl(i.getPl())
-                .weightEa(i.getWeightEa())
-                .weightResult(i.getWeightResult())
-                .palletxqty(i.getPalletxqty())
-                .onhand(i.getOnhand())
-                .soldByWeight(i.getSoldByWeight())
-                .recipe(i.getRecipe())
-                .storageType(i.getStorageType())
-                .picture1(i.getPicture1())
-                .department(i.getDepartment())
-                .category(i.getCategory())
-                .build();
     }
 }

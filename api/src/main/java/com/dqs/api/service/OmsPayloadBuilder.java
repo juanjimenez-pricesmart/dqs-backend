@@ -62,14 +62,16 @@ public class OmsPayloadBuilder {
         int lineId = 1;
 
         for (QuotationItem item : items) {
+            com.dqs.api.model.QuotationItemTaxes   tx = item.getTaxes();
+            com.dqs.api.model.QuotationItemProduct pr = item.getProduct();
 
-            double rate      = toDouble(item.getRate(),         0);
-            double taxFactor = toDouble(item.getTaxFactor(),    0);
-            double taxIco    = toDouble(item.getTaxIco(),       0);
-            double qty       = toDouble(item.getQty(),          1);
-            double weightEa  = toDouble(item.getWeightEa(),     0);
-            double taxPorc   = toDouble(item.getTaxPorcentaje(), 0);
-            boolean soldByW  = "Y".equals(item.getSoldByWeight());
+            double rate      = toDouble(item.getRate(),                              0);
+            double taxFactor = toDouble(tx != null ? tx.getTaxFactor()    : null,    0);
+            double taxIco    = toDouble(tx != null ? tx.getTaxIco()       : null,    0);
+            double qty       = toDouble(item.getQty(),                               1);
+            double weightEa  = toDouble(pr != null ? pr.getWeightEa()     : null,    0);
+            double taxPorc   = toDouble(tx != null ? tx.getTaxPorcentaje() : null,   0);
+            boolean soldByW  = pr != null && "Y".equals(pr.getSoldByWeight());
 
             // unitPrice — precio base para display
             double unitPrice = flagTax ? rate : round(rate - taxFactor, 2);
@@ -107,8 +109,8 @@ public class OmsPayloadBuilder {
             extended.put("Weight",               round(weightEa, 2));
             extended.put("SoldByWeight",         soldByW);
             extended.put("WeightUOM",            "LB");
-            extended.put("StorageType",          safeStr(item.getStorageType()));
-            extended.put("EspDescription",       safeStr(item.getDescription()));
+            extended.put("StorageType",          pr != null ? safeStr(pr.getStorageType()) : "");
+            extended.put("EspDescription",       pr != null ? safeStr(pr.getDescription()) : "");
             extended.put("UnitPricePerUOM",      unitPricePerUOM);
             extended.put("SellPriceBeforeTaxes", sellPriceBefore);
             extended.put("USDUnitPricePerUOM",   "0.0");
@@ -182,7 +184,7 @@ public class OmsPayloadBuilder {
             line.put("UnitPrice",               unitPriceOms);
             line.put("OriginalUnitPrice",       rateBase);
             line.put("ShipToLocationId",        quotation.getStoreId());
-            line.put("ItemDescription",         safeStr(item.getDescription()));
+            line.put("ItemDescription",         pr != null ? safeStr(pr.getDescription()) : "");
             line.put("DeliveryMethod",          deliveryMethod);
             line.put("Extended",                extended);
             line.put("OrderLinePromisingInfo",  promisingInfo);
@@ -203,7 +205,8 @@ public class OmsPayloadBuilder {
 
         // ── OrderAttributes ───────────────────────────────────────────────
         List<Map<String, Object>> attributes = new ArrayList<>();
-        attributes.add(attr("TenderKey",         str(quotation.getPaymentMethodId(), "0")));
+        String paymentMethodId = quotation.getPayment() != null ? quotation.getPayment().getPaymentMethodId() : "0";
+        attributes.add(attr("TenderKey",         str(paymentMethodId, "0")));
         attributes.add(attr("LocalSubTotal",      subtotal));
         attributes.add(attr("LocalTotal",         total));
         attributes.add(attr("LocalTaxes",         round(impuestos, 2)));
@@ -248,8 +251,9 @@ public class OmsPayloadBuilder {
         // ── Extended header ───────────────────────────────────────────────
         Map<String, Object> extendedHeader = new LinkedHashMap<>();
         extendedHeader.put("OrderCreatedBy",          str(usuario.get("email"), ""));
-        extendedHeader.put("Membership",              safeStr(quotation.getCustomerMembership()));
-        extendedHeader.put("CustomerId",              safeStr(quotation.getCustomerMembership()));
+        String membership = quotation.getCustomer() != null ? safeStr(quotation.getCustomer().getCustomerMembership()) : "";
+        extendedHeader.put("Membership",              membership);
+        extendedHeader.put("CustomerId",              membership);
         extendedHeader.put("AllowPartialFulfillment", true);
         extendedHeader.put("CurrentAssistant",        str(usuario.get("email"), ""));
         extendedHeader.put("DeliveryWindowTime",      w1);

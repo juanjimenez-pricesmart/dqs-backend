@@ -1,105 +1,49 @@
-// model/Quotation.java
 package com.dqs.api.model;
 
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "quotations")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class Quotation {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // --- Cliente ---
-    @Column(name = "customer_name", nullable = false, length = 200)
-    private String customerName;
-
-    @Column(name = "customer_membresia", length = 50)
-    private String customerMembership;
-
-    @Column(name = "customer_business", length = 200)
-    private String customerBusiness;
-
-    // --- Tienda / contexto ---
     @Column(name = "store_id", nullable = false)
     private Integer storeId;
 
     @Column(name = "user_id", nullable = false)
     private Integer userId;
 
-    @Column(name = "tax_rate", precision = 10, scale = 4)
-    private BigDecimal taxRate;
-
-    @Column(name = "aplicar_impuestos", columnDefinition = "TINYINT")
-    private Integer aplicarImpuestos;
-
-    @Column(name = "excent", columnDefinition = "TINYINT")
-    private Integer excent;
-
-    // --- Montos ---
-    @Column(name = "gross_amount", precision = 15, scale = 4)
-    private BigDecimal grossAmount;
-
-    @Column(name = "net_amount", precision = 15, scale = 4)
-    private BigDecimal netAmount;
-
-    @Column(name = "discount", precision = 15, scale = 4)
-    private BigDecimal discount;
-
-    @Column(name = "vat_charge_rate", precision = 10, scale = 4)
-    private BigDecimal vatChargeRate;
-
-    @Column(name = "vat_charge", precision = 15, scale = 4)
-    private BigDecimal vatCharge;
-
-    @Column(name = "service_charge_rate", precision = 10, scale = 4)
-    private BigDecimal serviceChargeRate;
-
-    @Column(name = "service_charge", precision = 15, scale = 4)
-    private BigDecimal serviceCharge;
-
-    @Column(name = "delivery_amount", precision = 15, scale = 4)
-    private BigDecimal deliveryAmount;
-
-    // --- Estado ---
     @Column(name = "status_id")
     private Integer statusId;
 
-    @Column(name = "paid_status")
-    private Integer paidStatus;
-
-    @Column(name = "quote_type_id")
-    private Integer quoteTypeId;
-
-    @Column(name = "payment_number", length = 100)
-    private String paymentNumber;
-
-    @Column(name = "payment_method_id", length = 20)
-    private String paymentMethodId;
-
-    @Column(name = "service_id")
-    private Integer serviceId;
-
-    @Column(name = "quote_no", length = 50)
-    private String quoteNo;
-
-    // --- Fechas ---
     @CreationTimestamp
     @Column(name = "date_time", updatable = false)
     private LocalDateTime dateTime;
 
     @Column(name = "dexpired")
     private LocalDate dexpired;
+
+    @OneToOne(mappedBy = "quotation", cascade = CascadeType.ALL, orphanRemoval = true)
+    private QuotationCustomer customer;
+
+    @OneToOne(mappedBy = "quotation", cascade = CascadeType.ALL, orphanRemoval = true)
+    private QuotationTotals totals;
+
+    @OneToOne(mappedBy = "quotation", cascade = CascadeType.ALL, orphanRemoval = true)
+    private QuotationPayment payment;
+
+    @Builder.Default
+    @OneToMany(mappedBy = "quotation", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<QuotationItem> items = new ArrayList<>();
 }
