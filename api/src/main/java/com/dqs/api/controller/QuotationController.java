@@ -80,6 +80,12 @@ public class QuotationController {
         return ResponseEntity.ok(quotationService.closeQuotation(id, request));
     }
 
+    @GetMapping("/{id}/oms-status")
+    public ResponseEntity<Object> omsStatus(@PathVariable Long id) {
+        log.info("[QuotationController] GET /api/v1/quotations/{}/oms-status", id);
+        return ResponseEntity.ok(quotationService.getOmsStatus(id));
+    }
+
     @PostMapping("/{id}/send-to-oms")
     public ResponseEntity<String> sendToOms(
             @PathVariable Long id,

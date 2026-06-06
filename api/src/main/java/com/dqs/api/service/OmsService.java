@@ -171,6 +171,29 @@ public class OmsService {
         }
     }
 
+    // ── Historial de status OMS ───────────────────────────────────────────
+
+    public String getOrderStatusHistory(String quoteNo, String token) {
+        String url = omsBaseUrl + "/api/status/history/" + quoteNo + "?access_token=" + token;
+        log.info("[OmsService] getOrderStatusHistory url={}", url);
+        try {
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(timeout);
+            conn.setReadTimeout(timeout);
+            conn.setRequestProperty("Accept", "application/json");
+            int status = conn.getResponseCode();
+            java.io.InputStream is = status < 400 ? conn.getInputStream() : conn.getErrorStream();
+            String response = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            conn.disconnect();
+            log.info("[OmsService] getOrderStatusHistory status={}", status);
+            return response;
+        } catch (Exception e) {
+            log.error("[OmsService] Error getting OMS status history: {}", e.getMessage());
+            return "{\"error\":\"" + e.getMessage() + "\"}";
+        }
+    }
+
     // ── Envío a OMS ───────────────────────────────────────────────────────
 
     public String sendPayload(Map<String, Object> payload, String paisIso2, String token) {

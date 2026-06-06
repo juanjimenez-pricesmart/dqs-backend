@@ -396,6 +396,23 @@ public class QuotationService {
         return b.build();
     }
 
+    // ── OMS status ───────────────────────────────────────────────────────
+
+    public Object getOmsStatus(Long id) {
+        Quotation quotation = findOrThrow(id);
+        if (quotation.getPayment() == null || quotation.getPayment().getQuoteNo() == null) {
+            throw new IllegalStateException("Quotation " + id + " has no OMS order number yet.");
+        }
+        String quoteNo = quotation.getPayment().getQuoteNo();
+        log.info("[QuotationService] getOmsStatus id={} quoteNo={}", id, quoteNo);
+        String response = omsService.getOrderStatusHistory(quoteNo, getOmsToken());
+        try {
+            return objectMapper.readValue(response, Object.class);
+        } catch (Exception e) {
+            return response;
+        }
+    }
+
     // ── OAuth2 token ──────────────────────────────────────────────────────
 
     private String getOmsToken() {
