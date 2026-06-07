@@ -20,7 +20,18 @@ public class ItemService {
         log.info("[ItemService] getItemByCode itemCode={} clubId={}", itemCode, clubId);
         String response = businessApiClient.get("/api/getItemCode/" + itemCode + "/club/" + clubId);
         try {
-            return objectMapper.readValue(response, Map.class);
+            String trimmed = response.trim();
+            if (trimmed.startsWith("[")) {
+                // Business API returns an array for some items — take the first element
+                Map<String, Object>[] arr = objectMapper.readValue(trimmed, Map[].class);
+                if (arr == null || arr.length == 0) {
+                    throw new RuntimeException("Item not found: " + itemCode);
+                }
+                return arr[0];
+            }
+            return objectMapper.readValue(trimmed, Map.class);
+        } catch (RuntimeException e) {
+            throw e;
         } catch (Exception e) {
             log.error("[ItemService] Error parsing item response: {}", e.getMessage());
             throw new RuntimeException("Error consultando item: " + e.getMessage());
