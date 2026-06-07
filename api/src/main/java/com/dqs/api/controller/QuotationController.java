@@ -62,6 +62,26 @@ public class QuotationController {
         return ResponseEntity.ok(quotationService.getItems(id));
     }
 
+    @Operation(summary = "Actualizar cantidad de ítem", description = "Actualiza solo la cantidad y recalcula el monto")
+    @PatchMapping("/{id}/items/{itemId}/qty")
+    public ResponseEntity<QuotationItemResponse> updateItemQty(
+            @Parameter(description = "ID de la cotización") @PathVariable Long id,
+            @Parameter(description = "ID del ítem") @PathVariable Long itemId,
+            @RequestBody java.util.Map<String, Object> body) {
+        log.info("[QuotationController] PATCH /api/v1/quotations/{}/items/{}/qty", id, itemId);
+        return ResponseEntity.ok(quotationService.updateItemQty(id, itemId, body));
+    }
+
+    @Operation(summary = "Eliminar ítem", description = "Elimina un ítem de la cotización por su ID de ítem")
+    @DeleteMapping("/{id}/items/{itemId}")
+    public ResponseEntity<Void> deleteItem(
+            @Parameter(description = "ID de la cotización") @PathVariable Long id,
+            @Parameter(description = "ID del ítem") @PathVariable Long itemId) {
+        log.info("[QuotationController] DELETE /api/v1/quotations/{}/items/{}", id, itemId);
+        quotationService.deleteItem(id, itemId);
+        return ResponseEntity.noContent().build();
+    }
+
     @Operation(summary = "Cerrar cotización", description = "Cambia el estado a cerrada/venta (3) y registra los datos de pago")
     @PatchMapping("/{id}/close")
     public ResponseEntity<QuotationResponse> close(

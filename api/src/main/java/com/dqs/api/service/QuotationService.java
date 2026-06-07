@@ -185,6 +185,55 @@ public class QuotationService {
         return toItemResponse(saved);
     }
 
+    // ── Update item qty ───────────────────────────────────────────────────
+
+    @Transactional
+    public QuotationItemResponse updateItemQty(Long quotationId, Long itemId, java.util.Map<String, Object> body) {
+        findOrThrow(quotationId);
+        QuotationItem item = quotationItemRepository.findById(itemId)
+                .orElseThrow(() -> new QuotationNotFoundException(itemId));
+        if (!item.getQuotation().getId().equals(quotationId)) {
+            throw new IllegalArgumentException("Item " + itemId + " does not belong to quotation " + quotationId);
+        }
+
+        BigDecimal newQty = new BigDecimal(body.get("qty").toString());
+        BigDecimal signPrice = coalesce(item.getSignPrice(), BigDecimal.ZERO);
+        BigDecimal taxFactor = item.getTaxes() != null ? coalesce(item.getTaxes().getTaxFactor(), BigDecimal.ZERO) : BigDecimal.ZERO;
+
+        item.setQty(newQty);
+        item.setAmount(newQty.multiply(signPrice).setScale(4, java.math.RoundingMode.HALF_UP));
+        if (item.getTaxes() != null) {
+            item.getTaxes().setTaxAmount(newQty.multiply(taxFactor).setScale(4, java.math.RoundingMode.HALF_UP));
+        }
+
+        QuotationItem pl = item.getProduct() != null ? item : item;
+        BigDecimal plVal = item.getProduct() != null ? coalesce(item.getProduct().getPl(), BigDecimal.ONE) : BigDecimal.ONE;
+        BigDecimal weightEa = item.getProduct() != null ? coalesce(item.getProduct().getWeightEa(), BigDecimal.ZERO) : BigDecimal.ZERO;
+        if (item.getProduct() != null) {
+            item.getProduct().setWeightResult(newQty.multiply(weightEa).setScale(4, java.math.RoundingMode.HALF_UP));
+            item.getProduct().setPalletxqty(plVal.compareTo(BigDecimal.ZERO) != 0
+                    ? newQty.divide(plVal, 4, java.math.RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO);
+        }
+
+        log.info("[QuotationService] updateItemQty id={} qty={}", itemId, newQty);
+        return toItemResponse(quotationItemRepository.save(item));
+    }
+
+    // ── Delete item ───────────────────────────────────────────────────────
+
+    @Transactional
+    public void deleteItem(Long quotationId, Long itemId) {
+        findOrThrow(quotationId);
+        QuotationItem item = quotationItemRepository.findById(itemId)
+                .orElseThrow(() -> new QuotationNotFoundException(itemId));
+        if (!item.getQuotation().getId().equals(quotationId)) {
+            throw new IllegalArgumentException("Item " + itemId + " does not belong to quotation " + quotationId);
+        }
+        quotationItemRepository.deleteById(itemId);
+        log.info("[QuotationService] item deleted id={} quotation_id={}", itemId, quotationId);
+    }
+
     // ── Get items ─────────────────────────────────────────────────────────
 
     public List<QuotationItemResponse> getItems(Long quotationId) {

@@ -63,9 +63,19 @@ public class OmsService {
         List<Map<String, Object>> userRows = jdbcTemplate.queryForList(
             "SELECT id, email FROM users WHERE id = ?", userId);
 
-        Map<String, Object> usuario = userRows.isEmpty()
+        Map<String, Object> usuarioRaw = userRows.isEmpty()
             ? Map.of("id", userId, "email", "")
             : userRows.get(0);
+
+        // OMS requires a valid email in OrderCreatedBy — fall back if missing
+        String usuarioEmail = usuarioRaw.get("email") != null
+            ? usuarioRaw.get("email").toString().trim()
+            : "";
+        if (usuarioEmail.isEmpty() || !usuarioEmail.contains("@")) {
+            usuarioEmail = "dqs-user-" + userId + "@pricesmart.com";
+        }
+        Map<String, Object> usuario = new java.util.HashMap<>(usuarioRaw);
+        usuario.put("email", usuarioEmail);
 
         // Socio — API de membresía
         Map<String, Object> socio = getMembershipData(membership, quotationId);

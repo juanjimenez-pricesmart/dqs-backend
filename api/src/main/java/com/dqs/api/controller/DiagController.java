@@ -19,6 +19,12 @@ public class DiagController {
             "SHOW TABLES LIKE 'ps_%'", String.class);
     }
 
+    @GetMapping("/stores")
+    public List<Map<String, Object>> stores() {
+        return jdbcTemplate.queryForList(
+            "SELECT ps_tienda_id, nombre, pais, pais_iso2, moneda, status FROM ps_tienda ORDER BY pais, nombre");
+    }
+
     @GetMapping("/store/{id}")
     public List<Map<String, Object>> store(@PathVariable int id) {
         return jdbcTemplate.queryForList(
