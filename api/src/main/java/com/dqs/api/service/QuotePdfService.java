@@ -49,19 +49,30 @@ public class QuotePdfService {
             .toList();
 
         // 3. Totals
+        boolean isColombia = quote.getStoreId() != null && quote.getStoreId() >= 6100 && quote.getStoreId() <= 6199;
         BigDecimal subtotal = items.stream()
             .map(i -> i.getAmount() != null ? i.getAmount() : BigDecimal.ZERO)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal totalTax = items.stream()
             .map(i -> i.getTaxAmount() != null ? i.getTaxAmount() : BigDecimal.ZERO)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalIco = isColombia ? items.stream()
+            .map(i -> {
+                BigDecimal ico = i.getTaxIco() != null ? i.getTaxIco() : BigDecimal.ZERO;
+                BigDecimal qty = i.getQty() != null ? i.getQty() : BigDecimal.ONE;
+                return ico.multiply(qty).setScale(2, java.math.RoundingMode.HALF_UP);
+            })
+            .reduce(BigDecimal.ZERO, BigDecimal::add) : BigDecimal.ZERO;
         BigDecimal deliveryAmt = delivery != null && delivery.get("amount") != null
             ? new BigDecimal(delivery.get("amount").toString()) : BigDecimal.ZERO;
-        BigDecimal total = subtotal.add(totalTax).add(deliveryAmt);
+        BigDecimal coBase = isColombia ? subtotal.subtract(totalTax).subtract(totalIco) : BigDecimal.ZERO;
+        BigDecimal total = isColombia
+            ? coBase.add(totalTax).add(totalIco).add(deliveryAmt)
+            : subtotal.add(totalTax).add(deliveryAmt);
 
         // 4. Build HTML
         String html = buildHtml(quote, items, store, fiscal, delivery,
-            currency, hasFel, subtotal, totalTax, deliveryAmt, total);
+            currency, hasFel, isColombia, subtotal, totalTax, totalIco, coBase, deliveryAmt, total);
 
         // 5. Render to PDF
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -85,7 +96,9 @@ public class QuotePdfService {
             Map<String, Object> delivery,
             String currency,
             boolean hasFel,
-            BigDecimal subtotal, BigDecimal totalTax, BigDecimal deliveryAmt, BigDecimal total) {
+            boolean isColombia,
+            BigDecimal subtotal, BigDecimal totalTax, BigDecimal totalIco,
+            BigDecimal coBase, BigDecimal deliveryAmt, BigDecimal total) {
 
         StringBuilder sb = new StringBuilder();
         sb.append("""
@@ -216,10 +229,18 @@ public class QuotePdfService {
 
         // ── Totals ──
         sb.append("<div class=\"totals\">");
-        rowAmt(sb, "Subtotal", currency, subtotal, false);
-        if (totalTax.compareTo(BigDecimal.ZERO) > 0) rowAmt(sb, "Tax", currency, totalTax, false);
-        if (deliveryAmt.compareTo(BigDecimal.ZERO) > 0) rowAmt(sb, "Delivery", currency, deliveryAmt, false);
-        rowAmt(sb, "Total", currency, total, true);
+        if (isColombia) {
+            rowAmt(sb, "Total Valor Base", currency, coBase, false);
+            if (totalTax.compareTo(BigDecimal.ZERO) > 0) rowAmt(sb, "Impuesto", currency, totalTax, false);
+            if (totalIco.compareTo(BigDecimal.ZERO) > 0) rowAmt(sb, "Impuesto ICO LICOR o IBUA", currency, totalIco, false);
+            if (deliveryAmt.compareTo(BigDecimal.ZERO) > 0) rowAmt(sb, "Delivery", currency, deliveryAmt, false);
+            rowAmt(sb, "Compra Total", currency, total, true);
+        } else {
+            rowAmt(sb, "Subtotal", currency, subtotal, false);
+            if (totalTax.compareTo(BigDecimal.ZERO) > 0) rowAmt(sb, "Tax", currency, totalTax, false);
+            if (deliveryAmt.compareTo(BigDecimal.ZERO) > 0) rowAmt(sb, "Delivery", currency, deliveryAmt, false);
+            rowAmt(sb, "Total", currency, total, true);
+        }
         sb.append("<div style=\"font-size:9px;color:#999;text-align:right;margin-top:4px;\">")
           .append(items.size()).append(" item").append(items.size() != 1 ? "s" : "")
           .append(delivery != null ? " + delivery" : "").append("</div>");
