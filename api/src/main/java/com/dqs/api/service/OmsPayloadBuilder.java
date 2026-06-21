@@ -3,6 +3,7 @@ package com.dqs.api.service;
 
 import com.dqs.api.model.Quotation;
 import com.dqs.api.model.QuotationItem;
+import com.dqs.api.util.ClubCapabilities;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -22,25 +23,25 @@ public class OmsPayloadBuilder {
             Map<String, Object> context,
             String ventanas) {
 
-        // ── Contexto ─────────────────────────────────────────────────────
+        // ── Context ───────────────────────────────────────────────────────
         Map<String, Object> club    = castMap(context.get("club"));
-        Map<String, Object> socio   = castMap(context.get("socio"));
-        Map<String, Object> usuario = castMap(context.get("usuario"));
+        Map<String, Object> member  = castMap(context.get("member"));
+        Map<String, Object> user    = castMap(context.get("user"));
         Map<String, Object> fel     = context.get("fel") != null ? castMap(context.get("fel")) : null;
 
-        double tasaCambio = toDouble(context.get("tasa_cambio"), 1.0);
-        String moneda     = str(club.get("moneda"),               "USD");
-        String idioma     = str(club.get("idioma"),               "es");
-        String paisIso2   = str(club.get("pais_iso2"),            "CR");
-        String impOp      = str(club.get("impuesto_operacion"),   "+");
+        double exchangeRate  = toDouble(context.get("exchange_rate"), 1.0);
+        String currency      = str(club.get("moneda"),              "USD");
+        String language      = str(club.get("idioma"),              "es");
+        String countryIso2   = str(club.get("pais_iso2"),           "CR");
+        String taxOperation  = str(club.get("impuesto_operacion"),  "+");
 
-        boolean flagTax = impOp.equals("-"); // VAT = true, IVA = false
-        String taxName  = flagTax ? "VAT" : "IVA";
+        boolean isVatIncluded = taxOperation.equals("-"); // VAT price-inclusive = true, IVA price-exclusive = false
+        String taxName        = isVatIncluded ? "VAT" : "IVA";
 
-        log.info("[OmsPayloadBuilder] flagTax={} taxName={} moneda={} paisIso2={}",
-                flagTax, taxName, moneda, paisIso2);
+        log.info("[OmsPayloadBuilder] isVatIncluded={} taxName={} currency={} countryIso2={}",
+                isVatIncluded, taxName, currency, countryIso2);
 
-        // ── Ventanas ─────────────────────────────────────────────────────
+        // ── Delivery windows ──────────────────────────────────────────────
         String[] wx = (ventanas != null && !ventanas.isEmpty())
                 ? ventanas.split("\\|")
                 : new String[]{"", "", "", ""};
@@ -51,68 +52,67 @@ public class OmsPayloadBuilder {
         String w3 = safeStr(wx[1]) + "Z"; // EndWindowTime
         String w4 = safeStr(wx[3]);        // PickingWindowId
 
-        // ── Timestamp ────────────────────────────────────────────────────
+        // ── Timestamp ─────────────────────────────────────────────────────
         String capturedDate = LocalDateTime.now()
                 .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
 
-        // ── Order Lines ──────────────────────────────────────────────────
+        // ── Order Lines ───────────────────────────────────────────────────
         List<Map<String, Object>> orderLines = new ArrayList<>();
         double subtotal  = 0;
-        double impuestos = 0;
+        double totalTax  = 0;
         int lineId = 1;
 
         for (QuotationItem item : items) {
             com.dqs.api.model.QuotationItemTaxes   tx = item.getTaxes();
             com.dqs.api.model.QuotationItemProduct pr = item.getProduct();
 
-            double rate      = toDouble(item.getRate(),                              0);
-            double taxFactor = toDouble(tx != null ? tx.getTaxFactor()    : null,    0);
-            double taxIco    = toDouble(tx != null ? tx.getTaxIco()       : null,    0);
-            double qty       = toDouble(item.getQty(),                               1);
-            double weightEa  = toDouble(pr != null ? pr.getWeightEa()     : null,    0);
-            double taxPorc   = toDouble(tx != null ? tx.getTaxPorcentaje() : null,   0);
-            boolean soldByW  = pr != null && "Y".equals(pr.getSoldByWeight());
+            double rate       = toDouble(item.getRate(),                              0);
+            double taxFactor  = toDouble(tx != null ? tx.getTaxFactor()    : null,    0);
+            double taxIco     = toDouble(tx != null ? tx.getTaxIco()       : null,    0);
+            double qty        = toDouble(item.getQty(),                               1);
+            double weightEa   = toDouble(pr != null ? pr.getWeightEa()     : null,    0);
+            double taxPercent = toDouble(tx != null ? tx.getTaxPorcentaje() : null,   0);
+            boolean soldByWeight = pr != null && "Y".equals(pr.getSoldByWeight());
 
-            // unitPrice — precio base para display
-            double unitPrice = flagTax ? rate : round(rate - taxFactor, 2);
+            // Base unit price for display
+            double unitPrice = isVatIncluded ? rate : round(rate - taxFactor, 2);
 
-            // rateBase — precio sin impuesto (IVA no-Colombia)
-            boolean isColombia = quotation.getStoreId() > 6100 && quotation.getStoreId() < 6199;
-            double rateBase;
-            if (!flagTax && !isColombia) {
-                rateBase = round(rate - taxFactor - (qty != 0 ? taxIco / qty : 0), 2);
+            boolean isColombia = ClubCapabilities.isColombia(quotation.getStoreId());
+            double basePrice;
+            if (!isVatIncluded && !isColombia) {
+                basePrice = round(rate - taxFactor - (qty != 0 ? taxIco / qty : 0), 2);
             } else {
-                rateBase = round(rate, 2);
+                basePrice = round(rate, 2);
             }
 
-            double unitPriceOms = (flagTax || isColombia)
+            double unitPriceOms = (isVatIncluded || isColombia)
                     ? round(unitPrice - taxFactor - (qty != 0 ? taxIco / qty : 0), 2)
                     : round(unitPrice, 2);
 
-            double unitPricePerUOM = (flagTax || isColombia)
+            double unitPricePerUOM = (isVatIncluded || isColombia)
                     ? unitPrice - (qty != 0 ? taxIco / qty : 0)
-                    : rateBase;
+                    : basePrice;
 
-            double sellPriceBefore = (flagTax || isColombia)
+            double sellPriceBeforeTax = (isVatIncluded || isColombia)
                     ? round(unitPrice - taxFactor - (qty != 0 ? taxIco / qty : 0), 2)
                     : unitPrice;
 
             double chargeTotal = unitPricePerUOM;
 
-            // Acumulados
-            double precioBase = round(rate - taxFactor - (qty != 0 ? taxIco / qty : 0), 2);
-            subtotal  += round(precioBase * qty, 2);
-            impuestos += round(taxFactor * qty + taxIco, 2);
+            // Running totals
+            double netUnitPrice = round(rate - taxFactor - (qty != 0 ? taxIco / qty : 0), 2);
+            subtotal += round(netUnitPrice * qty, 2);
+            totalTax += round(taxFactor * qty + taxIco, 2);
 
             // ── Extended ──────────────────────────────────────────────────
             Map<String, Object> extended = new LinkedHashMap<>();
             extended.put("Weight",               round(weightEa, 2));
-            extended.put("SoldByWeight",         soldByW);
+            extended.put("SoldByWeight",         soldByWeight);
             extended.put("WeightUOM",            "LB");
             extended.put("StorageType",          pr != null ? safeStr(pr.getStorageType()) : "");
             extended.put("EspDescription",       pr != null ? safeStr(pr.getDescription()) : "");
             extended.put("UnitPricePerUOM",      unitPricePerUOM);
-            extended.put("SellPriceBeforeTaxes", sellPriceBefore);
+            extended.put("SellPriceBeforeTaxes", sellPriceBeforeTax);
             extended.put("USDUnitPricePerUOM",   "0.0");
             extended.put("USDUnitPrice",         "0.0");
 
@@ -122,16 +122,16 @@ public class OmsPayloadBuilder {
 
             // ── ShipToAddress ─────────────────────────────────────────────
             Map<String, Object> address = new LinkedHashMap<>();
-            address.put("FirstName",  str(socio.get("firstName"),    "N/A"));
-            address.put("LastName",   str(socio.get("lastName"),     "N/A"));
+            address.put("FirstName",  str(member.get("firstName"),    "N/A"));
+            address.put("LastName",   str(member.get("lastName"),     "N/A"));
             address.put("Address2",   "NA");
-            address.put("Address1",   str(socio.get("addressLine1"), "N/A"));
-            address.put("City",       paisIso2);
-            address.put("State",      str(socio.get("city"),         "N/A"));
+            address.put("Address1",   str(member.get("addressLine1"), "N/A"));
+            address.put("City",       countryIso2);
+            address.put("State",      str(member.get("city"),         "N/A"));
             address.put("PostalCode", "1234");
-            address.put("Country",    paisIso2);
-            address.put("Phone",      str(socio.get("cellPhone"),    "0000000000"));
-            address.put("Email",      str(socio.get("email"),        "noreply@pricesmart.com"));
+            address.put("Country",    countryIso2);
+            address.put("Phone",      str(member.get("cellPhone"),    "0000000000"));
+            address.put("Email",      str(member.get("email"),        "noreply@pricesmart.com"));
 
             Map<String, Object> shipTo = new LinkedHashMap<>();
             shipTo.put("Address", address);
@@ -161,7 +161,7 @@ public class OmsPayloadBuilder {
 
             Map<String, Object> taxDetail1 = new LinkedHashMap<>();
             taxDetail1.put("TaxAmount",      qty != 0 ? round(taxIco / qty, 2) : 0);
-            taxDetail1.put("TaxRate",        taxPorc);
+            taxDetail1.put("TaxRate",        taxPercent);
             taxDetail1.put("TaxTypeId",      taxName);
             taxDetail1.put("Extended",       taxExtended1);
             taxDetail1.put("IsInformational", true);
@@ -182,7 +182,7 @@ public class OmsPayloadBuilder {
             line.put("ItemId",                  item.getProductId());
             line.put("Quantity",                item.getQty());
             line.put("UnitPrice",               unitPriceOms);
-            line.put("OriginalUnitPrice",       rateBase);
+            line.put("OriginalUnitPrice",       basePrice);
             line.put("ShipToLocationId",        quotation.getStoreId());
             line.put("ItemDescription",         pr != null ? safeStr(pr.getDescription()) : "");
             line.put("DeliveryMethod",          deliveryMethod);
@@ -197,20 +197,20 @@ public class OmsPayloadBuilder {
             lineId++;
         }
 
-        subtotal  = round(subtotal, 2);
-        double total = round(subtotal + impuestos, 2);
+        subtotal = round(subtotal, 2);
+        double grandTotal = round(subtotal + totalTax, 2);
 
-        log.info("[OmsPayloadBuilder] subtotal={} impuestos={} total={} lines={}",
-                subtotal, round(impuestos, 2), total, orderLines.size());
+        log.info("[OmsPayloadBuilder] subtotal={} totalTax={} grandTotal={} lines={}",
+                subtotal, round(totalTax, 2), grandTotal, orderLines.size());
 
         // ── OrderAttributes ───────────────────────────────────────────────
         List<Map<String, Object>> attributes = new ArrayList<>();
         String paymentMethodId = quotation.getPayment() != null ? quotation.getPayment().getPaymentMethodId() : "0";
         attributes.add(attr("TenderKey",         str(paymentMethodId, "0")));
         attributes.add(attr("LocalSubTotal",      subtotal));
-        attributes.add(attr("LocalTotal",         total));
-        attributes.add(attr("LocalTaxes",         round(impuestos, 2)));
-        attributes.add(attr("OriginalLocalTaxes", round(impuestos, 2)));
+        attributes.add(attr("LocalTotal",         grandTotal));
+        attributes.add(attr("LocalTaxes",         round(totalTax, 2)));
+        attributes.add(attr("OriginalLocalTaxes", round(totalTax, 2)));
 
         if (fel != null) {
             attributes.add(attr("EI-Identification", str(fel.get("nit"),           "")));
@@ -242,7 +242,7 @@ public class OmsPayloadBuilder {
         orderChargeExtended.put("UsdChargeAmount", "0");
 
         Map<String, Object> orderCharge = new LinkedHashMap<>();
-        orderCharge.put("ChargeTotal",       round(impuestos, 2));
+        orderCharge.put("ChargeTotal",       round(totalTax, 2));
         orderCharge.put("ChargeDisplayName", "Taxes");
         orderCharge.put("ChargeType",        orderChargeType);
         orderCharge.put("Extended",          orderChargeExtended);
@@ -250,28 +250,28 @@ public class OmsPayloadBuilder {
 
         // ── Extended header ───────────────────────────────────────────────
         Map<String, Object> extendedHeader = new LinkedHashMap<>();
-        extendedHeader.put("OrderCreatedBy",          str(usuario.get("email"), ""));
-        String membership = quotation.getCustomer() != null ? safeStr(quotation.getCustomer().getCustomerMembership()) : "";
-        extendedHeader.put("Membership",              membership);
-        extendedHeader.put("CustomerId",              membership);
+        extendedHeader.put("OrderCreatedBy",          str(user.get("email"), ""));
+        String membershipNumber = quotation.getCustomer() != null ? safeStr(quotation.getCustomer().getCustomerMembership()) : "";
+        extendedHeader.put("Membership",              membershipNumber);
+        extendedHeader.put("CustomerId",              membershipNumber);
         extendedHeader.put("AllowPartialFulfillment", true);
-        extendedHeader.put("CurrentAssistant",        str(usuario.get("email"), ""));
+        extendedHeader.put("CurrentAssistant",        str(user.get("email"), ""));
         extendedHeader.put("DeliveryWindowTime",      w1);
         extendedHeader.put("PickingWindowId",         w4);
         extendedHeader.put("PickingWindowTime",       w2);
         extendedHeader.put("EndWindowTime",           w3);
-        extendedHeader.put("CustomerLanguage",        idioma);
+        extendedHeader.put("CustomerLanguage",        language);
 
-        // ── Payload final ─────────────────────────────────────────────────
+        // ── Final payload ─────────────────────────────────────────────────
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("CapturedDate",      capturedDate);
-        payload.put("CurrencyCode",      moneda);
+        payload.put("CurrencyCode",      currency);
         payload.put("IsConfirmed",       true);
         payload.put("confirmed",         true);
-        payload.put("CustomerEmail",     str(socio.get("email"),     "noreply@pricesmart.com"));
-        payload.put("CustomerFirstName", str(socio.get("firstName"), "N/A"));
-        payload.put("CustomerLastName",  str(socio.get("lastName"),  "N/A"));
-        payload.put("CustomerPhone",     str(socio.get("cellPhone"), "0000000000"));
+        payload.put("CustomerEmail",     str(member.get("email"),     "noreply@pricesmart.com"));
+        payload.put("CustomerFirstName", str(member.get("firstName"), "N/A"));
+        payload.put("CustomerLastName",  str(member.get("lastName"),  "N/A"));
+        payload.put("CustomerPhone",     str(member.get("cellPhone"), "0000000000"));
         payload.put("CustomerTypeId",    "DEFAULT");
         payload.put("Extended",          extendedHeader);
         payload.put("OrderType",         mapOf("OrderTypeId",       "B2B"));

@@ -1,5 +1,7 @@
 package com.dqs.api.service;
 
+import com.dqs.api.client.BusinessApiClient;
+
 import com.dqs.api.dto.QuotationItemRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -87,15 +89,16 @@ public class DeliveryService {
             }
 
             // 2. Upsert 888905 line item — tax-exempt, rate = sign_price, qty = user qty
-            QuotationItemRequest itemReq = new QuotationItemRequest();
-            itemReq.setProductId(DELIVERY_PRODUCT_ID);
-            itemReq.setDescription("Delivery");
-            itemReq.setQty(qty);
-            itemReq.setRate(signPrice);
-            itemReq.setSignPrice(signPrice);
-            itemReq.setTaxPorcentaje(BigDecimal.ZERO);
-            itemReq.setTaxFactor(BigDecimal.ZERO);
-            itemReq.setTaxIco(BigDecimal.ZERO);
+            QuotationItemRequest itemReq = QuotationItemRequest.builder()
+                .productId(DELIVERY_PRODUCT_ID)
+                .description("Delivery")
+                .qty(qty)
+                .rate(signPrice)
+                .signPrice(signPrice)
+                .taxPorcentaje(BigDecimal.ZERO)
+                .taxFactor(BigDecimal.ZERO)
+                .taxIco(BigDecimal.ZERO)
+                .build();
             quotationService.saveItem(quotationId, itemReq);
 
             log.info("[DeliveryService] saveDelivery OK quotationId={} amount={}", quotationId, amount);

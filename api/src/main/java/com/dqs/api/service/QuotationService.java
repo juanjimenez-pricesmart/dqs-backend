@@ -289,7 +289,9 @@ public class QuotationService {
         Map<String, Object> club = castMap(context.get("club"));
         String paisIso2 = club != null ? str(club.get("pais_iso2"), "CR") : "CR";
 
+        long omsRequestedAt = System.currentTimeMillis();
         String omsResponse = omsService.sendPayload(payload, paisIso2, token);
+        long omsElapsedMs  = System.currentTimeMillis() - omsRequestedAt;
 
         try {
             @SuppressWarnings("unchecked")
@@ -299,12 +301,15 @@ public class QuotationService {
                 quotation.setStatusId(2);
                 ensurePayment(quotation).setQuoteNo(orderId);
                 quotationRepository.save(quotation);
-                log.info("[QuotationService] OMS OK orderId={} quotation_id={}", orderId, id);
+                log.info("[OMS_SUBMIT] status=OK quoteId={} membership={} storeId={} country={} omsOrderId={} elapsedMs={}",
+                        id, membership, quotation.getStoreId(), paisIso2, orderId, omsElapsedMs);
             } else {
-                log.warn("[QuotationService] OMS rejected quotation_id={} response={}", id, omsResponse);
+                log.warn("[OMS_SUBMIT] status=REJECTED quoteId={} membership={} storeId={} country={} elapsedMs={} response={}",
+                        id, membership, quotation.getStoreId(), paisIso2, omsElapsedMs, omsResponse);
             }
         } catch (Exception e) {
-            log.error("[QuotationService] Error parsing OMS response: {}", e.getMessage());
+            log.error("[OMS_SUBMIT] status=ERROR quoteId={} membership={} storeId={} country={} elapsedMs={} error={}",
+                    id, membership, quotation.getStoreId(), paisIso2, omsElapsedMs, e.getMessage());
         }
 
         return omsResponse;

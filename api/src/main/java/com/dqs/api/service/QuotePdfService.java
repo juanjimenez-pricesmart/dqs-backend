@@ -2,6 +2,7 @@ package com.dqs.api.service;
 
 import com.dqs.api.dto.QuotationItemResponse;
 import com.dqs.api.dto.QuotationResponse;
+import com.dqs.api.util.ClubCapabilities;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,11 +50,16 @@ public class QuotePdfService {
             .toList();
 
         // 3. Totals
-        boolean isColombia = quote.getStoreId() != null && quote.getStoreId() >= 6100 && quote.getStoreId() <= 6199;
-        BigDecimal subtotal = items.stream()
+        int storeId = quote.getStoreId() != null ? quote.getStoreId() : 0;
+        boolean isColombia    = ClubCapabilities.isColombia(storeId);
+        boolean vatInclusive  = ClubCapabilities.isVatInclusive(storeId);
+        boolean noIva         = ClubCapabilities.usesNoIva(storeId);
+        boolean isBarbadosStore = ClubCapabilities.isBarbados(storeId);
+
+        BigDecimal grossSubtotal = items.stream()
             .map(i -> i.getAmount() != null ? i.getAmount() : BigDecimal.ZERO)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalTax = items.stream()
+        BigDecimal totalTax = noIva ? BigDecimal.ZERO : items.stream()
             .map(i -> i.getTaxAmount() != null ? i.getTaxAmount() : BigDecimal.ZERO)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal totalIco = isColombia ? items.stream()
@@ -65,14 +71,28 @@ public class QuotePdfService {
             .reduce(BigDecimal.ZERO, BigDecimal::add) : BigDecimal.ZERO;
         BigDecimal deliveryAmt = delivery != null && delivery.get("amount") != null
             ? new BigDecimal(delivery.get("amount").toString()) : BigDecimal.ZERO;
-        BigDecimal coBase = isColombia ? subtotal.subtract(totalTax).subtract(totalIco) : BigDecimal.ZERO;
-        BigDecimal total = isColombia
-            ? coBase.add(totalTax).add(totalIco).add(deliveryAmt)
-            : subtotal.add(totalTax).add(deliveryAmt);
+
+        BigDecimal subtotal;
+        BigDecimal coBase;
+        BigDecimal total;
+        if (isColombia) {
+            coBase   = grossSubtotal.subtract(totalTax).subtract(totalIco);
+            subtotal = grossSubtotal;
+            total    = coBase.add(totalTax).add(totalIco).add(deliveryAmt);
+        } else if (vatInclusive) {
+            coBase   = BigDecimal.ZERO;
+            subtotal = grossSubtotal.subtract(totalTax);
+            total    = grossSubtotal.add(deliveryAmt);
+        } else {
+            coBase   = BigDecimal.ZERO;
+            subtotal = grossSubtotal;
+            total    = grossSubtotal.add(totalTax).add(deliveryAmt);
+        }
 
         // 4. Build HTML
         String html = buildHtml(quote, items, store, fiscal, delivery,
-            currency, hasFel, isColombia, subtotal, totalTax, totalIco, coBase, deliveryAmt, total);
+            currency, hasFel, isColombia, vatInclusive, isBarbadosStore,
+            subtotal, totalTax, totalIco, coBase, deliveryAmt, total);
 
         // 5. Render to PDF
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -97,6 +117,8 @@ public class QuotePdfService {
             String currency,
             boolean hasFel,
             boolean isColombia,
+            boolean vatInclusive,
+            boolean isBarbadosStore,
             BigDecimal subtotal, BigDecimal totalTax, BigDecimal totalIco,
             BigDecimal coBase, BigDecimal deliveryAmt, BigDecimal total) {
 
@@ -235,6 +257,16 @@ public class QuotePdfService {
             if (totalIco.compareTo(BigDecimal.ZERO) > 0) rowAmt(sb, "Impuesto ICO LICOR o IBUA", currency, totalIco, false);
             if (deliveryAmt.compareTo(BigDecimal.ZERO) > 0) rowAmt(sb, "Delivery", currency, deliveryAmt, false);
             rowAmt(sb, "Compra Total", currency, total, true);
+        } else if (vatInclusive) {
+            rowAmt(sb, "Subtotal (excl. tax)", currency, subtotal, false);
+            if (totalTax.compareTo(BigDecimal.ZERO) > 0) rowAmt(sb, "IVA", currency, totalTax, false);
+            if (deliveryAmt.compareTo(BigDecimal.ZERO) > 0) rowAmt(sb, "Delivery", currency, deliveryAmt, false);
+            rowAmt(sb, "Total", currency, total, true);
+        } else if (isBarbadosStore) {
+            rowAmt(sb, "Subtotal (Before VAT)", currency, subtotal, false);
+            if (totalTax.compareTo(BigDecimal.ZERO) > 0) rowAmt(sb, "VAT", currency, totalTax, false);
+            if (deliveryAmt.compareTo(BigDecimal.ZERO) > 0) rowAmt(sb, "Delivery", currency, deliveryAmt, false);
+            rowAmt(sb, "Amount Due", currency, total, true);
         } else {
             rowAmt(sb, "Subtotal", currency, subtotal, false);
             if (totalTax.compareTo(BigDecimal.ZERO) > 0) rowAmt(sb, "Tax", currency, totalTax, false);
