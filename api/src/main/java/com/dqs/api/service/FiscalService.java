@@ -193,4 +193,10 @@ public class FiscalService {
             "SELECT code, name FROM neighborhoods WHERE zone_code = ? AND city_code = ? ORDER BY name",
             zoneCode, cityCode);
     }
+
+    public List<Map<String, Object>> getDocTypes(String country) {
+        return jdbcTemplate.queryForList(
+            "SELECT felid, nombre_es AS descripcion, formato FROM ps_fel WHERE pais_iso2 = ? ORDER BY nombre_es",
+            country);
+    }
 }

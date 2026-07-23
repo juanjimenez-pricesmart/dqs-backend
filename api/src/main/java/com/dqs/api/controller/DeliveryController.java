@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -29,6 +30,15 @@ public class DeliveryController {
             @RequestParam(defaultValue = "PICK_UP_IN_CLUB") String type) {
         log.info("[DeliveryController] GET /windows clubId={} dateTime={} type={}", clubId, dateTime, type);
         return ResponseEntity.ok(deliveryService.getDeliveryWindows(clubId, dateTime, type));
+    }
+
+    // ── Routes ────────────────────────────────────────────────────────────────
+
+    @Operation(summary = "Active delivery routes for a store")
+    @GetMapping("/routes")
+    public ResponseEntity<List<Map<String, Object>>> getRoutes(@RequestParam Integer storeId) {
+        log.info("[DeliveryController] GET /routes storeId={}", storeId);
+        return ResponseEntity.ok(deliveryService.getRoutes(storeId));
     }
 
     // ── quotation_delivery ────────────────────────────────────────────────────

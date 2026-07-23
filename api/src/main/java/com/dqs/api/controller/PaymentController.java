@@ -19,6 +19,17 @@ import java.util.Map;
 public class PaymentController {
 
     private final PriceSmartPaymentService paymentService;
+    private final com.dqs.api.repository.PaymentMethodRepository paymentMethodRepository;
+
+    @Operation(
+        summary = "Métodos de pago por país",
+        description = "Lista los métodos de pago disponibles (orders_pago) para el ISO2 de país indicado"
+    )
+    @GetMapping("/methods")
+    public ResponseEntity<java.util.List<Map<String, Object>>> getMethods(@RequestParam String country) {
+        log.info("[PaymentController] GET /api/v1/payments/methods country={}", country);
+        return ResponseEntity.ok(paymentMethodRepository.findByCountry(country));
+    }
 
     @Operation(
         summary = "Crear solicitud de pago",

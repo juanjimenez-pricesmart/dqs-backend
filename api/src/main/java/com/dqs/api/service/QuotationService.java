@@ -31,6 +31,7 @@ public class QuotationService {
 
     private final QuotationRepository quotationRepository;
     private final QuotationItemRepository quotationItemRepository;
+    private final com.dqs.api.repository.QuotationCancelRepository quotationCancelRepository;
     private final OmsService omsService;
     private final OmsPayloadBuilder omsPayloadBuilder;
     private final ObjectMapper objectMapper;
@@ -234,6 +235,25 @@ public class QuotationService {
         log.info("[QuotationService] item deleted id={} quotation_id={}", itemId, quotationId);
     }
 
+    // ── Cancel quotation (pending only) ───────────────────────────────────
+
+    public List<Map<String, Object>> getCancelReasons() {
+        return quotationCancelRepository.findReasons();
+    }
+
+    @Transactional
+    public void cancelQuotation(Long id, Integer reasonId) {
+        Quotation quotation = findOrThrow(id);
+        if (quotation.getStatusId() != 1) {
+            throw new QuotationAlreadySubmittedException(id, quotation.getStatusId());
+        }
+        if (reasonId == null) {
+            throw new IllegalArgumentException("reasonId is required to cancel a quotation");
+        }
+        quotationCancelRepository.cancel(id, reasonId);
+        log.info("[QuotationService] quotation cancelled id={} reasonId={}", id, reasonId);
+    }
+
     // ── Get items ─────────────────────────────────────────────────────────
 
     public List<QuotationItemResponse> getItems(Long quotationId) {
@@ -298,7 +318,6 @@ public class QuotationService {
             Map<String, Object> resp = objectMapper.readValue(omsResponse, Map.class);
             if (resp.containsKey("orderId")) {
                 String orderId = resp.get("orderId").toString();
-                quotation.setStatusId(2);
                 ensurePayment(quotation).setQuoteNo(orderId);
                 quotationRepository.save(quotation);
                 log.info("[OMS_SUBMIT] status=OK quoteId={} membership={} storeId={} country={} omsOrderId={} elapsedMs={}",

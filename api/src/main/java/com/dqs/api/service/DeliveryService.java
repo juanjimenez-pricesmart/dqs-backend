@@ -65,27 +65,32 @@ public class DeliveryService {
                 "SELECT COUNT(*) FROM quotation_delivery WHERE quotation_id = ?",
                 Integer.class, quotationId);
 
+            BigDecimal pallets = data.get("pallets") != null
+                ? new BigDecimal(data.get("pallets").toString()) : null;
+            String routeId   = data.get("route_id")   != null ? data.get("route_id").toString()   : null;
+            String routeName = data.get("route_name") != null ? data.get("route_name").toString() : null;
+
             if (count != null && count > 0) {
                 jdbcTemplate.update(
                     "UPDATE quotation_delivery SET " +
                     "  qty = ?, sign_price = ?, amount = ?, address = ?, delivery_date = ?, " +
-                    "  hour_from = ?, hour_to = ?, ring = ?, box = ?, route_id = ? " +
+                    "  hour_from = ?, hour_to = ?, ring = ?, box = ?, route_id = ?, route_name = ?, pallets = ? " +
                     "WHERE quotation_id = ?",
                     qty, signPrice, amount,
                     data.get("address"), data.get("delivery_date"),
                     data.get("hour_from"), data.get("hour_to"),
-                    data.get("ring"), data.get("box"), data.get("route_id"),
+                    data.get("ring"), data.get("box"), routeId, routeName, pallets,
                     quotationId);
             } else {
                 jdbcTemplate.update(
                     "INSERT INTO quotation_delivery " +
-                    "  (quotation_id, qty, sign_price, amount, address, delivery_date, hour_from, hour_to, ring, box, route_id) " +
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    "  (quotation_id, qty, sign_price, amount, address, delivery_date, hour_from, hour_to, ring, box, route_id, route_name, pallets) " +
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     quotationId,
                     qty, signPrice, amount,
                     data.get("address"), data.get("delivery_date"),
                     data.get("hour_from"), data.get("hour_to"),
-                    data.get("ring"), data.get("box"), data.get("route_id"));
+                    data.get("ring"), data.get("box"), routeId, routeName, pallets);
             }
 
             // 2. Upsert 888905 line item — tax-exempt, rate = sign_price, qty = user qty
@@ -108,6 +113,20 @@ public class DeliveryService {
             log.error("[DeliveryService] Error saving delivery: {}", e.getMessage());
             return false;
         }
+    }
+
+    // ── Routes for a store ────────────────────────────────────────────────────
+
+    public List<Map<String, Object>> getRoutes(Integer storeId) {
+        log.info("[DeliveryService] getRoutes storeId={}", storeId);
+        return jdbcTemplate.queryForList(
+            "SELECT A.llave AS id, A.descripcion AS name, A.truck_size AS truckSize, " +
+            "TR.nombre AS routeTypeName, TR.codigo AS routeTypeCode " +
+            "FROM ps_rutas A " +
+            "LEFT JOIN ps_tipos_ruta TR ON A.tipo_ruta_id = TR.id AND TR.status = 'A' " +
+            "WHERE A.ps_tienda_id = ? AND A.status = 'A' " +
+            "ORDER BY A.llave",
+            storeId);
     }
 
     // ── Get delivery metadata ─────────────────────────────────────────────────

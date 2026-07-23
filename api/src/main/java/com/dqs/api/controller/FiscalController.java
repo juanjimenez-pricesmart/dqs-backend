@@ -81,4 +81,10 @@ public class FiscalController {
             @RequestParam String cityCode) {
         return ResponseEntity.ok(fiscalService.getNeighborhoods(zoneCode, cityCode));
     }
+
+    @Operation(summary = "Tipos de documento fiscal por país (ps_fel)")
+    @GetMapping("/catalog/doc-types")
+    public ResponseEntity<List<Map<String, Object>>> docTypes(@RequestParam String country) {
+        return ResponseEntity.ok(fiscalService.getDocTypes(country));
+    }
 }

@@ -75,9 +75,8 @@ public class OmsPayloadBuilder {
             boolean soldByWeight = pr != null && "Y".equals(pr.getSoldByWeight());
 
             // Base unit price for display
-            double unitPrice = isVatIncluded ? rate : round(rate - taxFactor, 2);
-
             boolean isColombia = ClubCapabilities.isColombia(quotation.getStoreId());
+            double unitPrice = (isVatIncluded || isColombia) ? rate : round(rate - taxFactor, 2);
             double basePrice;
             if (!isVatIncluded && !isColombia) {
                 basePrice = round(rate - taxFactor - (qty != 0 ? taxIco / qty : 0), 2);

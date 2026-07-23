@@ -22,6 +22,14 @@ import java.util.List;
 public class QuotationController {
 
     private final QuotationService quotationService;
+    private final com.dqs.api.repository.QuotationListRepository quotationListRepository;
+
+    @Operation(summary = "List quotations for a store", description = "Returns quotation summaries (id, customer, date, amount, status) for the given club")
+    @GetMapping
+    public ResponseEntity<List<java.util.Map<String, Object>>> listByStore(@RequestParam int storeId) {
+        log.info("[QuotationController] GET /api/v1/quotations storeId={}", storeId);
+        return ResponseEntity.ok(quotationListRepository.findSummaryByStoreId(storeId));
+    }
 
     @Operation(summary = "Crear cotización", description = "Crea una nueva cotización en estado borrador (status=1)")
     @PostMapping
@@ -35,6 +43,23 @@ public class QuotationController {
     public ResponseEntity<QuotationResponse> getById(
             @Parameter(description = "ID de la cotización") @PathVariable Long id) {
         return ResponseEntity.ok(quotationService.getById(id));
+    }
+
+    @Operation(summary = "Razones de cancelación", description = "Lista de motivos disponibles para cancelar una cotización")
+    @GetMapping("/cancel-reasons")
+    public ResponseEntity<List<java.util.Map<String, Object>>> getCancelReasons() {
+        return ResponseEntity.ok(quotationService.getCancelReasons());
+    }
+
+    @Operation(summary = "Cancelar cotización", description = "Cancela una cotización pendiente (status=1), marcándola como status=4 con un motivo")
+    @PatchMapping("/{id}/cancel")
+    public ResponseEntity<Void> cancel(
+            @Parameter(description = "ID de la cotización") @PathVariable Long id,
+            @RequestBody java.util.Map<String, Object> body) {
+        Integer reasonId = body.get("reasonId") != null ? Integer.parseInt(body.get("reasonId").toString()) : null;
+        log.info("[QuotationController] PATCH /api/v1/quotations/{}/cancel reasonId={}", id, reasonId);
+        quotationService.cancelQuotation(id, reasonId);
+        return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "Enviar cotización (submit)", description = "Cambia el estado de borrador (1) a enviada (2)")

@@ -1,0 +1,97 @@
+{
+  "info": {
+    "name": "DQS Backend",
+    "description": "⚠️  NOTE: PHP sends snake_case keys but the Java DTOs use camelCase with no Jackson SNAKE_CASE strategy configured.\nEither add @JsonProperty on each DTO field OR configure spring.jackson.property-naming-strategy=SNAKE_CASE in application.properties.\nThis collection mirrors EXACTLY what the PHP layer sends so you can reproduce the issue and verify the fix.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://quotation-api.int.pricesmart.com",
+      "description": "Staging environment — matches JAVA_QUOTATION_API_URL in .env-dev. Use http://localhost:8081 for local development."
+    },
+    {
+      "key": "quotationId",
+      "value": "1",
+      "description": "Set this after a successful Create Quotation call"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/health",
+        "description": "Verifies the service is up. Expected: 200 'DQS Backend Running'"
+      }
+    },
+    {
+      "name": "Create Quotation (PHP payload — snake_case)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/quotations",
+        "description": "Exact payload sent by Orders::_createViaJavaApi(). Uses snake_case keys — will be rejected until the Java side maps them.",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customer_name\":       \"John Doe\",\n  \"customer_membresia\":  \"GOLD\",\n  \"customer_business\":   \"Acme Corp\",\n\n  \"store_id\":            1,\n  \"user_id\":             10,\n  \"tax_rate\":            0.12,\n  \"aplicar_impuestos\":   1,\n\n  \"gross_amount\":        1000.00,\n  \"net_amount\":          880.00,\n  \"discount\":            0.00,\n  \"vat_charge_rate\":     0.10,\n  \"vat_charge\":          100.00,\n  \"service_charge_rate\": 0.06,\n  \"service_charge\":      60.00,\n  \"delivery_amount\":     0,\n  \"excent\":              0,\n\n  \"status_id\":           1,\n  \"paid_status\":         1,\n  \"payment_method_id\":   0,\n  \"service_id\":          0,\n\n  \"dexpired\":            \"2026-06-21\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Create Quotation (Java DTO — camelCase ✅)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/quotations",
+        "description": "Same call using camelCase — matches the current Java CreateQuotationRequest DTO as-is. Use this once spring.jackson.property-naming-strategy=SNAKE_CASE is added (then both work), or keep this as the canonical version.",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerName\":       \"John Doe\",\n  \"customerMembresia\":  \"GOLD\",\n  \"customerBusiness\":   \"Acme Corp\",\n\n  \"storeId\":            1,\n  \"userId\":             10,\n  \"taxRate\":            0.12,\n  \"aplicarImpuestos\":   1,\n\n  \"grossAmount\":        1000.00,\n  \"netAmount\":          880.00,\n  \"discount\":           0.00,\n  \"vatChargeRate\":      0.10,\n  \"vatCharge\":          100.00,\n  \"serviceChargeRate\":  0.06,\n  \"serviceCharge\":      60.00,\n\n  \"dexpired\":           \"2026-06-21\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Get Quotation by ID",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/quotations/{{quotationId}}",
+        "description": "Retrieves a quotation by its ID. Used by QuotationApiService::getQuotation()."
+      }
+    },
+    {
+      "name": "Submit Quotation (PHP payload — snake_case)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/quotations/{{quotationId}}/submit",
+        "description": "Exact payload sent by QuotationApiService::submitQuotation(). Note: PHP sends 'payment_method' but Java DTO field is 'paymentMethodId'.",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"submitted_by\":    10,\n  \"notes\":           \"Client approved via phone\",\n  \"payment_method\":  1\n}"
+        }
+      }
+    },
+    {
+      "name": "Submit Quotation (Java DTO — camelCase ✅)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/quotations/{{quotationId}}/submit",
+        "description": "Matches the current Java SubmitQuotationRequest DTO fields.",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"submittedBy\":      10,\n  \"notes\":            \"Client approved via phone\",\n  \"paymentMethodId\":  1\n}"
+        }
+      }
+    }
+  ]
+}
