@@ -1,0 +1,559 @@
+---
+title: QuoteCenter — Database Structure (3NF) · B2B-707
+---
+erDiagram
+
+    %% ══════════ Reference / country layer ══════════
+
+    countries {
+        int id PK
+        char2 iso2 UK
+        char3 iso3 UK
+        varchar100 name
+        char3 currency_code
+        varchar10 currency_symbol
+        char2 default_language
+        varchar20 tax_name
+        varchar10 tax_id_label
+        tinyint price_includes_tax
+        decimal15_4 min_quote_amount_usd
+        decimal15_4 min_quote_amount_local
+        decimal15_4 transfer_notice_amount_usd
+        decimal15_4 transfer_notice_amount_local
+        tinyint is_active
+    }
+
+    clubs {
+        int id PK
+        int club_number UK "operational code, e.g. 6410"
+        int country_id FK
+        varchar100 name
+        varchar250 address
+        varchar50 phone
+        decimal9_6 latitude
+        decimal9_6 longitude
+        varchar30 tax_registration_number
+        varchar64 timezone
+        tinyint is_active
+    }
+
+    cities {
+        int id PK
+        int country_id FK
+        varchar20 code "FEL catalog code"
+        varchar100 name
+    }
+
+    zones {
+        int id PK
+        int city_id FK
+        varchar20 code
+        varchar100 name
+    }
+
+    neighborhoods {
+        int id PK
+        int zone_id FK
+        varchar20 code
+        varchar100 name
+    }
+
+    economic_activities {
+        int id PK
+        int country_id FK
+        varchar20 code
+        varchar255 name
+        tinyint is_active
+    }
+
+    fiscal_document_types {
+        int id PK
+        int country_id FK
+        varchar30 code UK "NIT, DUI, CEDULA_FISICA..."
+        varchar80 name_en "OMS EI-IdType"
+        varchar80 name_es
+        smallint min_length
+        smallint max_length
+        varchar150 input_mask
+        varchar150 validation_regex
+        tinyint is_active
+    }
+
+    payment_methods {
+        int id PK
+        int country_id FK
+        varchar100 name
+        int tender_key "OMS TenderKey"
+        tinyint is_active
+        int sort_order
+    }
+
+    exchange_rates {
+        bigint id PK
+        int country_id FK
+        decimal15_6 rate "local per 1 USD"
+        date effective_date
+        varchar100 source
+        bigint created_by_user_id FK
+    }
+
+    system_configurations {
+        int id PK
+        varchar191 config_key UK
+        text config_value
+        enum data_type
+        varchar50 category
+        tinyint is_active
+    }
+
+    countries ||--o{ clubs : "has"
+    countries ||--o{ cities : "has"
+    cities ||--o{ zones : "has"
+    zones ||--o{ neighborhoods : "has"
+    countries ||--o{ economic_activities : "has"
+    countries ||--o{ fiscal_document_types : "has"
+    countries ||--o{ payment_methods : "offers"
+    countries ||--o{ exchange_rates : "daily rate"
+
+    %% ══════════ Users & RBAC ══════════
+
+    users {
+        bigint id PK
+        char36 idp_subject UK "IDP sub, JIT"
+        varchar255 email UK
+        varchar100 first_name
+        varchar100 last_name
+        varchar30 phone
+        tinyint is_active
+        datetime last_login_at
+    }
+
+    roles {
+        int id PK
+        varchar50 code UK
+        varchar100 name
+        tinyint is_active
+    }
+
+    permissions {
+        int id PK
+        varchar100 code UK "resource.action"
+        varchar255 description
+    }
+
+    role_permissions {
+        bigint id PK
+        int role_id FK
+        int permission_id FK
+    }
+
+    user_roles {
+        bigint id PK
+        bigint user_id FK
+        int role_id FK
+        int club_id FK "NULL = global"
+        bigint granted_by_user_id FK
+    }
+
+    user_clubs {
+        bigint id PK
+        bigint user_id FK
+        int club_id FK
+        tinyint is_default
+    }
+
+    roles ||--o{ role_permissions : "grants"
+    permissions ||--o{ role_permissions : "granted in"
+    users ||--o{ user_roles : "assigned"
+    roles ||--o{ user_roles : "of"
+    clubs ||--o{ user_roles : "scoped to"
+    users ||--o{ user_clubs : "works at"
+    clubs ||--o{ user_clubs : "staffed by"
+
+    %% ══════════ Club configuration satellites ══════════
+
+    club_texts {
+        int id PK
+        int club_id FK
+        varchar40 text_type "QUOTE_DISCLAIMER..."
+        mediumtext content
+        tinyint is_active
+    }
+
+    club_delivery_settings {
+        int id PK
+        int club_id FK "UNIQUE"
+        tinyint home_delivery_enabled
+        tinyint ddc_delivery_enabled
+        tinyint ddc_inventory_enabled
+        tinyint home_delivery_contract_required
+        tinyint show_zones
+    }
+
+    club_notification_recipients {
+        int id PK
+        int club_id FK
+        varchar255 email
+        tinyint is_active
+    }
+
+    clubs ||--o{ club_texts : "has"
+    clubs ||--o| club_delivery_settings : "has"
+    clubs ||--o{ club_notification_recipients : "notifies"
+
+    %% ══════════ Members (master data external — Business API) ══════════
+
+    member_contact_overrides {
+        bigint id PK
+        varchar50 membership_number UK
+        varchar150 email
+        varchar30 phone
+        varchar250 address_line1
+        varchar255 business_name
+        bigint created_by_user_id FK
+    }
+
+    member_fiscal_profiles {
+        bigint id PK
+        varchar50 membership_number
+        int country_id FK
+        int document_type_id FK
+        varchar50 document_number
+        tinyint document_validated "GoSocket"
+        varchar255 business_name
+        varchar500 address
+        varchar30 nrc "SV"
+        int economic_activity_id FK
+        int city_id FK
+        int zone_id FK "composite FK w/ city"
+        int neighborhood_id FK "composite FK w/ zone"
+        tinyint wants_tax_invoice
+        tinyint wants_electronic_ticket
+        tinyint is_active
+    }
+
+    countries ||--o{ member_fiscal_profiles : "of"
+    fiscal_document_types ||--o{ member_fiscal_profiles : "typed by"
+    economic_activities ||--o{ member_fiscal_profiles : "activity"
+    cities ||--o{ member_fiscal_profiles : "geo"
+    zones ||--o{ member_fiscal_profiles : "geo"
+    neighborhoods ||--o{ member_fiscal_profiles : "geo"
+
+    %% ══════════ Routes & delivery ops ══════════
+
+    route_types {
+        int id PK
+        varchar50 code UK
+        varchar100 name
+        tinyint is_active
+    }
+
+    routes {
+        int id PK
+        int club_id FK
+        varchar10 code "ex llave"
+        int route_type_id FK
+        varchar200 name
+        decimal10_2 truck_size
+        tinyint requires_full_pallet
+        tinyint requires_half_pallet
+        tinyint is_active
+    }
+
+    route_prices {
+        int id PK
+        int route_id FK
+        enum unit_type "TRIP|FULL|HALF|QUARTER_PALLET"
+        decimal15_4 price_local
+        decimal15_4 price_usd
+    }
+
+    delivery_loads {
+        bigint id PK
+        int club_id FK
+        int route_id FK
+        enum status "OPEN|CLOSED"
+        bigint created_by_user_id FK
+        datetime closed_at
+        datetime sent_at
+    }
+
+    clubs ||--o{ routes : "operates"
+    route_types ||--o{ routes : "classifies"
+    routes ||--o{ route_prices : "priced per unit"
+    clubs ||--o{ delivery_loads : "dispatches"
+    routes ||--o{ delivery_loads : "on"
+    users ||--o{ delivery_loads : "created by"
+
+    %% ══════════ Quotation core ══════════
+
+    quotation_statuses {
+        int id PK
+        varchar30 code UK "OPEN, CLOSED..."
+        varchar100 name_en
+        varchar100 name_es
+        varchar15 flag_color
+    }
+
+    quote_types {
+        int id PK
+        varchar30 code UK
+        varchar50 name
+    }
+
+    quotation_cancel_reasons {
+        int id PK
+        varchar200 description
+        tinyint is_active
+    }
+
+    quotations {
+        bigint id PK
+        varchar20 quote_number UK "human/PDF number"
+        int club_id FK
+        bigint created_by_user_id FK
+        int status_id FK
+        int quote_type_id FK "set at close"
+        int cancel_reason_id FK
+        char3 currency_code "SNAPSHOT"
+        decimal15_6 exchange_rate_to_usd "SNAPSHOT at close"
+        varchar50 purchase_order_reference "customer ODC/PO"
+        text comments
+        varchar30 invoice_number
+        varchar30 oms_order_id UK
+        datetime oms_submitted_at
+        datetime quoted_at
+        date expires_on "+21 days"
+    }
+
+    quotation_customers {
+        bigint id PK
+        bigint quotation_id FK "UNIQUE — snapshot 1:1"
+        varchar50 membership_number "NULL = walk-in"
+        varchar100 first_name
+        varchar100 last_name
+        varchar255 business_name
+        varchar20 membership_type
+        date membership_expires_on
+        varchar150 email
+        varchar30 phone
+        varchar250 address_line1
+        char2 country_code
+    }
+
+    quotation_fiscal {
+        bigint id PK
+        bigint quotation_id FK "UNIQUE — snapshot 1:1"
+        bigint fiscal_profile_id FK "provenance"
+        varchar50 membership_number
+        char2 country_code
+        int document_type_id FK
+        varchar80 document_type_name "SNAPSHOT"
+        varchar50 document_number
+        tinyint document_validated
+        varchar255 business_name
+        varchar500 address
+        varchar30 nrc "SV"
+        varchar20 economic_activity_code "code+name SNAPSHOT"
+        varchar20 city_code "code+name SNAPSHOT"
+        varchar20 zone_code "code+name SNAPSHOT"
+        varchar20 neighborhood_code "code+name SNAPSHOT"
+        tinyint wants_tax_invoice "single home of the flag"
+        tinyint wants_electronic_ticket "CR"
+    }
+
+    quotation_items {
+        bigint id PK
+        bigint quotation_id FK
+        varchar20 product_id UK "per quote; external API key"
+        varchar500 description "SNAPSHOT"
+        decimal12_4 qty
+        decimal15_4 unit_price "SNAPSHOT"
+        decimal15_4 sign_price "SNAPSHOT"
+        decimal15_4 line_amount
+        decimal15_4 unit_cost "ex cu_ea"
+        decimal12_4 units_per_pallet
+        decimal12_4 cube_volume
+        decimal12_4 weight_each
+        decimal15_4 weight_total
+        decimal12_4 pallet_qty
+        decimal12_2 on_hand "SNAPSHOT"
+        tinyint is_sold_by_weight
+        varchar10 storage_type
+        varchar500 picture_url
+        varchar10 department_code
+        varchar10 category_code
+        varchar500 comments
+    }
+
+    tax_types {
+        int id PK
+        varchar20 code UK "IVA, ICO, EXEMPTION, WITHHOLDING"
+        tinyint reduces_total
+    }
+
+    quotation_item_taxes {
+        bigint id PK
+        bigint quotation_item_id FK
+        int tax_type_id FK "UNIQUE per line"
+        decimal10_4 tax_rate "SNAPSHOT"
+        decimal15_4 base_amount
+        decimal15_6 unit_factor "OMS price math"
+        decimal15_4 tax_amount
+    }
+
+    quotation_totals {
+        bigint id PK
+        bigint quotation_id FK "UNIQUE — frozen at close"
+        tinyint apply_taxes
+        tinyint is_exempt
+        decimal10_4 tax_rate
+        decimal15_4 gross_amount
+        decimal15_4 discount_amount
+        decimal15_4 tax_total
+        decimal15_4 ico_total "Colombia"
+        decimal15_4 exempt_amount
+        tinyint apply_withholding "Colombia"
+        decimal15_4 withholding_total
+        decimal10_4 service_charge_rate "TT/JM/BB"
+        decimal15_4 service_charge_amount
+        decimal10_4 vat_charge_rate "TT/JM/BB"
+        decimal15_4 vat_charge_amount
+        decimal15_4 delivery_amount "rollup of delivery"
+        decimal15_4 net_amount
+        decimal12_2 total_units
+        decimal12_2 total_weight
+        decimal10_2 total_pallets
+    }
+
+    quotation_deliveries {
+        bigint id PK
+        bigint quotation_id FK "UNIQUE — optional 1:1"
+        int route_id FK
+        varchar200 route_name "SNAPSHOT"
+        bigint delivery_load_id FK
+        decimal12_4 quantity
+        decimal15_4 unit_price "SNAPSHOT of route price"
+        decimal15_4 amount "source of truth for delivery charge"
+        varchar500 address
+        int city_id FK
+        date delivery_date
+        time window_start
+        time window_end
+        varchar50 ring_code
+        varchar50 box_code
+        decimal10_2 pallet_count
+    }
+
+    quotations }o--|| clubs : "quoted at"
+    quotations }o--|| users : "created by"
+    quotations }o--|| quotation_statuses : "in status"
+    quotations }o--o| quote_types : "classified"
+    quotations }o--o| quotation_cancel_reasons : "cancelled for"
+    quotations ||--|| quotation_customers : "customer snapshot"
+    quotations ||--o| quotation_fiscal : "fiscal snapshot"
+    quotations ||--o{ quotation_items : "lines"
+    quotation_items ||--o{ quotation_item_taxes : "taxes per type"
+    tax_types ||--o{ quotation_item_taxes : "typed by"
+    quotations ||--o| quotation_totals : "totals frozen at close"
+    quotations ||--o| quotation_deliveries : "delivery"
+    member_fiscal_profiles ||--o{ quotation_fiscal : "copied from"
+    fiscal_document_types ||--o{ quotation_fiscal : "typed by"
+    routes ||--o{ quotation_deliveries : "via"
+    delivery_loads ||--o{ quotation_deliveries : "grouped in"
+    cities ||--o{ quotation_deliveries : "to"
+
+    %% ══════════ Payments ══════════
+
+    payment_statuses {
+        int id PK
+        varchar30 code UK "PENDING, PAID..."
+        tinyint is_terminal
+    }
+
+    payment_gateways {
+        int id PK
+        varchar30 code UK "PRICESMART_PAYMENTS"
+    }
+
+    payment_attempt_statuses {
+        int id PK
+        varchar20 code UK "CREATED, PAID, CAPTURED..."
+        tinyint is_terminal
+    }
+
+    quotation_payments {
+        bigint id PK
+        bigint quotation_id FK "UNIQUE — 1:1 summary"
+        int payment_status_id FK
+        int payment_method_id FK
+        varchar100 payment_reference
+        datetime paid_at
+    }
+
+    payment_attempts {
+        bigint id PK
+        bigint quotation_id FK
+        int gateway_id FK
+        tinyint attempt_number "UNIQUE per quote+gateway"
+        varchar20 gateway_invoice_id "UNIQUE per gateway"
+        int tender_key "SNAPSHOT"
+        int status_id FK
+        varchar50 gateway_status "raw, verbatim"
+        text payment_link_url
+        decimal15_4 amount
+        char3 currency_code
+        json request_payload
+        json response_payload
+        json callback_payload
+        json status_check_payload
+        json capture_payload
+        varchar30 capture_oms_order_id
+        datetime expires_at
+        bigint created_by_user_id FK
+    }
+
+    quotations ||--o| quotation_payments : "payment summary"
+    quotation_payments }o--|| payment_statuses : "in status"
+    quotation_payments }o--o| payment_methods : "via"
+    quotations ||--o{ payment_attempts : "gateway attempts"
+    payment_gateways ||--o{ payment_attempts : "through"
+    payment_attempt_statuses ||--o{ payment_attempts : "in status"
+
+    %% ══════════ Documents & notes ══════════
+
+    document_types {
+        int id PK
+        varchar30 code UK "INVOICE, PURCHASE_ORDER..."
+        varchar100 name
+    }
+
+    quotation_documents {
+        bigint id PK
+        bigint quotation_id FK
+        int document_type_id FK
+        varchar50 reference_number
+        varchar255 file_name
+        varchar500 storage_url "S3"
+        bigint uploaded_by_user_id FK
+    }
+
+    quotation_notes {
+        bigint id PK
+        bigint quotation_id FK
+        enum note_type "COMMENT|CALL"
+        text body
+        bigint created_by_user_id FK
+    }
+
+    oms_statuses {
+        int id PK
+        varchar10 code UK "external OMS codes, display only"
+        varchar100 name_en
+        varchar100 name_es
+    }
+
+    quotations ||--o{ quotation_documents : "attachments"
+    document_types ||--o{ quotation_documents : "typed by"
+    quotations ||--o{ quotation_notes : "activity"
+    users ||--o{ quotation_notes : "authored by"
