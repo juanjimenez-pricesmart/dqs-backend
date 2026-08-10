@@ -79,11 +79,18 @@ erDiagram
         tinyint is_active
     }
 
-    payment_methods {
+    payment_method_types {
+        int id PK
+        varchar50 code UK "VISA, EFECTIVO, PAYMENT_LINK…"
+        varchar100 name "defined once"
+        tinyint is_active
+    }
+
+    country_payment_methods {
         int id PK
         int country_id FK
-        varchar100 name
-        int tender_key "OMS TenderKey"
+        int method_type_id FK "UNIQUE per country"
+        int tender_key "OMS TenderKey, varies by country"
         tinyint is_active
         int sort_order
     }
@@ -112,7 +119,8 @@ erDiagram
     zones ||--o{ neighborhoods : "has"
     countries ||--o{ economic_activities : "has"
     countries ||--o{ fiscal_document_types : "has"
-    countries ||--o{ payment_methods : "offers"
+    countries ||--o{ country_payment_methods : "offers"
+    payment_method_types ||--o{ country_payment_methods : "available as"
     countries ||--o{ exchange_rates : "daily rate"
 
     %% ══════════ Users & RBAC ══════════
@@ -515,7 +523,7 @@ erDiagram
 
     quotations ||--o| quotation_payments : "payment summary"
     quotation_payments }o--|| payment_statuses : "in status"
-    quotation_payments }o--o| payment_methods : "via"
+    quotation_payments }o--o| country_payment_methods : "via"
     quotations ||--o{ payment_attempts : "gateway attempts"
     payment_gateways ||--o{ payment_attempts : "through"
     payment_attempt_statuses ||--o{ payment_attempts : "in status"

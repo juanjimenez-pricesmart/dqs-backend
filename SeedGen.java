@@ -237,18 +237,34 @@ public class SeedGen {
     }
 
     static void paymentMethods(PrintWriter w) throws SQLException {
-        w.println("-- ── payment_methods (ex orders_pago; tender_key feeds OMS payload) ──");
-        ResultSet rs = q("SELECT pais_iso2, descripcion, tender_key FROM orders_pago ORDER BY pais_iso2, pago_id");
+        w.println("-- ── payment_method_types + country_payment_methods (ex orders_pago) ──");
+        w.println("-- Method concept defined once; per-country row carries availability + tender_key.");
+        ResultSet rs = q("SELECT pais_iso2, descripcion, tender_key FROM orders_pago ORDER BY pago_id");
+        // pass 1: distinct method names → type catalog with derived codes
+        Map<String,String> typeCode = new LinkedHashMap<>(); // name -> code
+        List<String[]> rows = new ArrayList<>();
+        while (rs.next()) rows.add(new String[]{rs.getString(1), rs.getString(2), rs.getString(3)});
+        Map<String,Integer> usedCodes = new HashMap<>();
+        for (String[] r : rows) {
+            if (typeCode.containsKey(r[1])) continue;
+            String base = code(r[1]);
+            int c = usedCodes.merge(base, 1, Integer::sum);
+            typeCode.put(r[1], c == 1 ? base : base + "_" + c);
+        }
+        for (Map.Entry<String,String> e : typeCode.entrySet())
+            w.printf("INSERT INTO payment_method_types (code, name) VALUES (%s, %s);%n", esc(e.getValue()), esc(e.getKey()));
+        w.println("-- payment_method_types: " + typeCode.size() + " rows");
+        // pass 2: per-country availability, dedup on (country, method)
         int k = 0;
         Set<String> dedup = new HashSet<>();
-        while (rs.next()) {
-            String key = rs.getString(1) + "|" + rs.getString(2);
-            if (!dedup.add(key)) continue; // uq (country, name)
-            w.printf("INSERT INTO payment_methods (country_id, name, tender_key, sort_order) VALUES (%s, %s, %d, %d);%n",
-                countrySub(rs.getString(1)), esc(rs.getString(2)), rs.getInt(3), k);
+        for (String[] r : rows) {
+            if (!dedup.add(r[0] + "|" + r[1])) continue;
+            w.printf("INSERT INTO country_payment_methods (country_id, method_type_id, tender_key, sort_order)" +
+                " VALUES (%s, (SELECT id FROM payment_method_types WHERE code=%s), %s, %d);%n",
+                countrySub(r[0]), esc(typeCode.get(r[1])), r[2], k);
             k++;
         }
-        w.println("-- payment_methods: " + k + " rows\n");
+        w.println("-- country_payment_methods: " + k + " rows\n");
     }
 
     static void quoteTypes(PrintWriter w) throws SQLException {

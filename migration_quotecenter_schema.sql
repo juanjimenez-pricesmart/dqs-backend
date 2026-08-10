@@ -350,20 +350,36 @@ CREATE TABLE fiscal_document_types (
     CONSTRAINT fk_fdt_country FOREIGN KEY (country_id) REFERENCES countries (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- Per-country tender catalog (ex orders_pago). tender_key feeds the OMS payload.
-CREATE TABLE payment_methods (
+-- Payment method concept catalog (ex orders_pago names, defined ONCE).
+-- The per-country row below carries only what genuinely varies by country.
+CREATE TABLE payment_method_types (
     id          INT           NOT NULL AUTO_INCREMENT,
-    country_id  INT           NOT NULL,
+    code        VARCHAR(50)   NOT NULL COMMENT 'VISA, EFECTIVO, PAYMENT_LINK…',
     name        VARCHAR(100)  NOT NULL,
-    tender_key  INT           NOT NULL COMMENT 'POS/OMS tender key',
     is_active   TINYINT(1)    NOT NULL DEFAULT 1,
-    sort_order  INT           NOT NULL DEFAULT 0,
     created_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    UNIQUE KEY uq_payment_methods_country_name (country_id, name),
-    KEY idx_payment_methods_country_active (country_id, is_active),
-    CONSTRAINT fk_payment_methods_country FOREIGN KEY (country_id) REFERENCES countries (id)
+    UNIQUE KEY uq_payment_method_types_code (code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Per-country availability + tender mapping (ex orders_pago rows).
+-- tender_key feeds the OMS payload and DOES vary by country for some methods
+-- (e.g. cash has 5 different tender keys across countries).
+CREATE TABLE country_payment_methods (
+    id              INT           NOT NULL AUTO_INCREMENT,
+    country_id      INT           NOT NULL,
+    method_type_id  INT           NOT NULL,
+    tender_key      INT           NOT NULL COMMENT 'POS/OMS tender key',
+    is_active       TINYINT(1)    NOT NULL DEFAULT 1,
+    sort_order      INT           NOT NULL DEFAULT 0,
+    created_at      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_cpm_country_method (country_id, method_type_id),
+    KEY idx_cpm_country_active (country_id, is_active),
+    CONSTRAINT fk_cpm_country     FOREIGN KEY (country_id)     REFERENCES countries (id),
+    CONSTRAINT fk_cpm_method_type FOREIGN KEY (method_type_id) REFERENCES payment_method_types (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Append-only daily FX (ex ps_tasa_cambio; per-store scoping dropped — dead
@@ -786,7 +802,7 @@ CREATE TABLE quotation_payments (
     id                 BIGINT        NOT NULL AUTO_INCREMENT,
     quotation_id       BIGINT        NOT NULL,
     payment_status_id  INT           NOT NULL COMMENT 'resolved by code (PENDING) at insert',
-    payment_method_id  INT           NULL COMMENT 'ex varchar tender key, now real FK',
+    payment_method_id  INT           NULL COMMENT 'country-scoped method row (carries the tender_key OMS needs)',
     payment_reference  VARCHAR(100)  NULL COMMENT 'check/transfer/receipt ref (ex payment_number)',
     paid_at            DATETIME      NULL,
     created_at         TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -795,7 +811,7 @@ CREATE TABLE quotation_payments (
     UNIQUE KEY uq_quotation_payments_quotation (quotation_id),
     CONSTRAINT fk_qp_quotation FOREIGN KEY (quotation_id)      REFERENCES quotations (id),
     CONSTRAINT fk_qp_status    FOREIGN KEY (payment_status_id) REFERENCES payment_statuses (id),
-    CONSTRAINT fk_qp_method    FOREIGN KEY (payment_method_id) REFERENCES payment_methods (id)
+    CONSTRAINT fk_qp_method    FOREIGN KEY (payment_method_id) REFERENCES country_payment_methods (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- THE single append-only payment-attempt/link log (replaces payment_links,
