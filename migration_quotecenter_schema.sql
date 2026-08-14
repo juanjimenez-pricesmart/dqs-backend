@@ -119,6 +119,21 @@ CREATE TABLE quotation_statuses (
     UNIQUE KEY uq_quotation_statuses_code (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- Origin channel of a quotation: club staff vs member self-service (tablet/
+-- phone/PC — device is irrelevant, the channel is the same). New channels
+-- (e.g. ECOMMERCE, PROSPECTING) are rows, never DDL.
+CREATE TABLE quotation_channels (
+    id          INT           NOT NULL AUTO_INCREMENT,
+    code        VARCHAR(30)   NOT NULL,
+    name_en     VARCHAR(100)  NOT NULL,
+    name_es     VARCHAR(100)  NOT NULL,
+    is_active   TINYINT(1)    NOT NULL DEFAULT 1,
+    created_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_quotation_channels_code (code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE quote_types (
     id          INT           NOT NULL AUTO_INCREMENT,
     code        VARCHAR(30)   NOT NULL,
@@ -608,7 +623,8 @@ CREATE TABLE quotations (
     id                        BIGINT        NOT NULL AUTO_INCREMENT,
     quote_number              VARCHAR(20)   NOT NULL COMMENT 'app-generated business number (club prefix + sequence)',
     club_id                   INT           NOT NULL,
-    created_by_user_id        BIGINT        NOT NULL,
+    channel_id                INT           NOT NULL COMMENT 'resolved by code at insert: STAFF or MEMBER (self-service)',
+    created_by_user_id        BIGINT        NULL COMMENT 'staff creator; NULL for member self-service (member identity lives in quotation_customers). Service rule: channel STAFF requires a user',
     status_id                 INT           NOT NULL COMMENT 'resolved by code (OPEN) at insert — no magic default',
     quote_type_id             INT           NULL COMMENT 'set at close',
     cancel_reason_id          INT           NULL,
@@ -630,6 +646,7 @@ CREATE TABLE quotations (
     KEY idx_quotations_quoted_at (quoted_at),
     KEY idx_quotations_user (created_by_user_id),
     CONSTRAINT fk_quotations_club          FOREIGN KEY (club_id)            REFERENCES clubs (id),
+    CONSTRAINT fk_quotations_channel       FOREIGN KEY (channel_id)         REFERENCES quotation_channels (id),
     CONSTRAINT fk_quotations_user          FOREIGN KEY (created_by_user_id) REFERENCES users (id),
     CONSTRAINT fk_quotations_status        FOREIGN KEY (status_id)          REFERENCES quotation_statuses (id),
     CONSTRAINT fk_quotations_quote_type    FOREIGN KEY (quote_type_id)      REFERENCES quote_types (id),
@@ -952,6 +969,10 @@ CREATE TABLE quotation_notes (
 -- ============================================================================
 -- SEEDS — catalog value sets (services resolve rows BY CODE, never by id)
 -- ============================================================================
+
+INSERT INTO quotation_channels (code, name_en, name_es) VALUES
+  ('STAFF',  'Club staff',          'Asesor de club'),
+  ('MEMBER', 'Member self-service', 'Autoservicio del socio');
 
 INSERT INTO quotation_statuses (code, name_en, name_es, sort_order) VALUES
   ('OPEN',        'Open',        'Abierta',      1),

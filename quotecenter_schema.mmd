@@ -309,6 +309,13 @@ erDiagram
         varchar50 name
     }
 
+    quotation_channels {
+        int id PK
+        varchar30 code UK "STAFF | MEMBER (self-service)"
+        varchar100 name_en
+        varchar100 name_es
+    }
+
     quotation_cancel_reasons {
         int id PK
         varchar200 description
@@ -319,7 +326,8 @@ erDiagram
         bigint id PK
         varchar20 quote_number UK "human/PDF number"
         int club_id FK
-        bigint created_by_user_id FK
+        int channel_id FK "STAFF | MEMBER"
+        bigint created_by_user_id FK "NULL on self-service"
         int status_id FK
         int quote_type_id FK "set at close"
         int cancel_reason_id FK
@@ -454,7 +462,8 @@ erDiagram
     }
 
     quotations }o--|| clubs : "quoted at"
-    quotations }o--|| users : "created by"
+    quotations }o--|| quotation_channels : "originated via"
+    quotations }o--o| users : "created by (staff)"
     quotations }o--|| quotation_statuses : "in status"
     quotations }o--o| quote_types : "classified"
     quotations }o--o| quotation_cancel_reasons : "cancelled for"
