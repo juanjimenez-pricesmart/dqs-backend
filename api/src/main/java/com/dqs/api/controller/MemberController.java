@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.util.List;
 
 @Slf4j
 @RestController
@@ -19,6 +20,14 @@ import java.util.Map;
 public class MemberController {
 
     private final MemberService memberService;
+
+    @Operation(summary = "Buscar socios por nombre", description = "Retorna hasta 50 coincidencias para que el operador seleccione una membresía.")
+    @GetMapping("/search")
+    public ResponseEntity<List<Map<String, Object>>> searchMembers(
+            @Parameter(description = "Nombre o parte del nombre") @RequestParam String name) {
+        log.info("[MemberController] GET /api/v1/members/search");
+        return ResponseEntity.ok(memberService.searchMembers(name));
+    }
 
     @Operation(summary = "Buscar membresía", description = "Valida y retorna los datos del socio desde el Business API. El ID debe tener 14 caracteres.")
     @GetMapping("/{membership}")
