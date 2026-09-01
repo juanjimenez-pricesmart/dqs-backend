@@ -24,11 +24,41 @@ public class QuotationController {
     private final QuotationService quotationService;
     private final com.dqs.api.repository.QuotationListRepository quotationListRepository;
 
-    @Operation(summary = "List quotations for a store", description = "Returns quotation summaries (id, customer, date, amount, status) for the given club")
+    @Operation(summary = "List quotations for a store", description = "Legacy-parity quotations list. Period filter only applies to non-pending statuses; scope=mine restricts to the given userId")
     @GetMapping
-    public ResponseEntity<List<java.util.Map<String, Object>>> listByStore(@RequestParam int storeId) {
-        log.info("[QuotationController] GET /api/v1/quotations storeId={}", storeId);
-        return ResponseEntity.ok(quotationListRepository.findSummaryByStoreId(storeId));
+    public ResponseEntity<List<java.util.Map<String, Object>>> listByStore(
+            @RequestParam int storeId,
+            @RequestParam(defaultValue = "1") int statusId,
+            @RequestParam(defaultValue = "all") String scope,
+            @RequestParam(required = false) Integer userId,
+            @RequestParam(required = false) Integer periodId) {
+        log.info("[QuotationController] GET /api/v1/quotations storeId={} statusId={} scope={} userId={} periodId={}",
+                storeId, statusId, scope, userId, periodId);
+        boolean mineOnly = "mine".equalsIgnoreCase(scope);
+        return ResponseEntity.ok(
+                quotationListRepository.findByStoreFiltered(storeId, statusId, mineOnly, userId, periodId));
+    }
+
+    @Operation(summary = "Deliveries of sold quotations", description = "Pending-shipment deliveries for quotations in Sale status (status=3), for the given club")
+    @GetMapping("/deliveries")
+    public ResponseEntity<List<java.util.Map<String, Object>>> listDeliveries(@RequestParam int storeId) {
+        log.info("[QuotationController] GET /api/v1/quotations/deliveries storeId={}", storeId);
+        return ResponseEntity.ok(quotationListRepository.findDeliveriesByStore(storeId));
+    }
+
+    @Operation(summary = "Quotations summary", description = "Count and total amount per status for the period; pending quotations are counted without a period restriction")
+    @GetMapping("/summary")
+    public ResponseEntity<List<java.util.Map<String, Object>>> summary(
+            @RequestParam int storeId,
+            @RequestParam(required = false) Integer periodId) {
+        log.info("[QuotationController] GET /api/v1/quotations/summary storeId={} periodId={}", storeId, periodId);
+        return ResponseEntity.ok(quotationListRepository.findSummaryByStatus(storeId, periodId));
+    }
+
+    @Operation(summary = "Monthly closing periods", description = "Periods from ps_cierre_mensual for the Period filter, most recent first")
+    @GetMapping("/periods")
+    public ResponseEntity<List<java.util.Map<String, Object>>> periods() {
+        return ResponseEntity.ok(quotationListRepository.findPeriods());
     }
 
     @Operation(summary = "Crear cotización", description = "Crea una nueva cotización en estado borrador (status=1)")

@@ -22,7 +22,7 @@ public class DiagController {
     @GetMapping("/stores")
     public List<Map<String, Object>> stores() {
         return jdbcTemplate.queryForList(
-            "SELECT ps_tienda_id, nombre, pais, pais_iso2, moneda, status FROM ps_tienda ORDER BY pais, nombre");
+            "SELECT ps_tienda_id, nombre, pais, pais_iso2, idioma, moneda, status FROM ps_tienda ORDER BY pais, nombre");
     }
 
     @GetMapping("/store/{id}")
