@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QuoteCenter · Backend parity — work needed</title>
+<style>
+:root{--bg:#f4f4f7;--surface:#fff;--ink:#1d2029;--muted:#5c6270;--line:#d9dae2;--accent:#28527a;--accent-soft:#e3ebf3;
+--ok:#2e7d4f;--ok-soft:#e2f0e8;--warn:#8a6d1f;--warn-soft:#f5edd7;--bad:#a33c3c;--bad-soft:#f6e3e3;
+--mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15171c;--surface:#1e2128;--ink:#e7e8ec;--muted:#9aa0ad;--line:#363a45;--accent:#7ba7d0;--accent-soft:#243242;--ok:#7fc79c;--ok-soft:#22352a;--warn:#d4b455;--warn-soft:#3a3222;--bad:#e08a8a;--bad-soft:#3c2626;}}
+:root[data-theme="dark"]{--bg:#15171c;--surface:#1e2128;--ink:#e7e8ec;--muted:#9aa0ad;--line:#363a45;--accent:#7ba7d0;--accent-soft:#243242;--ok:#7fc79c;--ok-soft:#22352a;--warn:#d4b455;--warn-soft:#3a3222;--bad:#e08a8a;--bad-soft:#3c2626;}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,Segoe UI,Roboto,sans-serif;line-height:1.5;font-size:14px}
+.wrap{max-width:1180px;margin:0 auto;padding:36px 22px 72px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+h1{font-size:25px;margin:0 0 8px;text-wrap:balance}h2{font-size:17px;margin:40px 0 10px}
+p.lede{color:var(--muted);max-width:760px;margin:0}
+.stats{display:flex;gap:24px;flex-wrap:wrap;margin:20px 0;font-variant-numeric:tabular-nums}
+.stat b{display:block;font-size:22px}.stat span{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.stat.m b{color:var(--bad)}.stat.d b{color:var(--warn)}.stat.k b{color:var(--ok)}
+.tablewrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{background:var(--accent-soft);text-align:left;padding:8px 10px;position:sticky;top:0}
+td{border-top:1px solid var(--line);padding:9px 10px;vertical-align:top}
+td.num{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+.step{font-weight:600}.src,.comp{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px;word-break:break-all}
+.badge{display:inline-block;font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.badge.match{background:var(--ok-soft);color:var(--ok)}.badge.differs{background:var(--warn-soft);color:var(--warn)}.badge.missing{background:var(--bad-soft);color:var(--bad)}.badge.done{background:var(--ok-soft);color:var(--ok);font-weight:700}
+td.detail{color:var(--muted);max-width:420px}
+ul.risks{margin:8px 0 0;padding-left:20px;color:var(--muted)}ul.risks li{margin-bottom:6px}
+.note{border-left:3px solid var(--accent);padding:8px 14px;background:var(--surface);border-radius:0 8px 8px 0;margin:12px 0;color:var(--muted);font-size:13.5px}
+.note.warn{border-left-color:var(--warn);background:var(--warn-soft);}
+.note.danger{border-left-color:var(--bad);background:var(--bad-soft);}
+.stack-box{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px 18px;margin:16px 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px}
+.stack-item{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.stack-item b{color:var(--ink);display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px}
+.endpoint-list{margin:8px 0 0;padding-left:0;list-style:none}
+.endpoint-list li{padding:4px 0;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:12px;display:flex;align-items:baseline;gap:8px}
+.endpoint-list li:last-child{border-bottom:none}
+.method{font-weight:700;font-size:11px;min-width:44px}
+.method.get{color:var(--ok)}.method.post{color:var(--accent)}.method.patch{color:var(--warn)}.method.delete{color:var(--bad)}
+.ep-path{color:var(--ink)}.ep-desc{color:var(--muted);font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:12px}
+.notouch{background:var(--surface);border:1px solid var(--bad);border-radius:8px;padding:12px 16px;margin:16px 0}
+.notouch h3{margin:0 0 8px;font-size:13px;color:var(--bad)}
+.notouch ul{margin:0;padding-left:18px;color:var(--muted);font-family:var(--mono);font-size:12px}
+.notouch ul li{margin-bottom:4px}
+.coord-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;margin:16px 0}
+.coord-card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--muted)}
+.coord-card h4{margin:0 0 6px;font-size:13px;color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="eyebrow">QuoteCenter · Backend · API &amp; data contract gaps vs legacy DQS</div>
+<h1>Backend parity — work needed</h1>
+<p class="lede">This document lists the backend work needed to support the QuoteCenter React frontend. It is intentionally separated from the frontend parity document to allow parallel development without overlap. The frontend developer works from <code>docs/frontend-parity.html</code>; the backend developer works from this document. Do not modify the same Spring Boot controllers or DB schema tables the other developer is actively using — coordinate via PR before touching shared files.</p>
+
+<div class="stats">
+<div class="stat k"><b>28</b><span>endpoints built</span></div>
+<div class="stat m"><b>19</b><span>backend tasks pending</span></div>
+<div class="stat m"><b>4</b><span>schema items pending</span></div>
+</div>
+
+<div class="note warn"><b>B1 (Okta) is deferred, not a blocker.</b> The team decided that development and QA run without authentication so functional parity is not blocked. Build B5, B10 and B14 behind <code>quotecenter.auth.enabled=false</code>, taking user and role from the existing request contract, and turn on real role-gating when B1 lands. Confirm with the team before starting B1 itself.</div>
+
+<h2>Tech stack</h2>
+<div class="stack-box">
+  <div class="stack-item"><b>Framework</b>Spring Boot 4.0.6 / Java 17 (<code>pom.xml</code>)</div>
+  <div class="stack-item"><b>Data access</b>Spring Data JPA / Hibernate for the quotation aggregate (<code>@Entity</code> <code>Quotation</code>, <code>QuotationItem</code>, <code>QuotationPayment</code>, <code>QuotationCustomer</code>, <code>QuotationTotals</code>) <b>plus</b> raw <code>JdbcTemplate</code> for list, summary, delivery and catalog queries. Both patterns are in use — match whichever the surrounding class already uses.</div>
+  <div class="stack-item"><b>Database (running)</b><b>Legacy MySQL DQS</b> — <code>com.mysql.cj.jdbc.Driver</code>, <code>MySQLDialect</code>, <code>spring.jpa.hibernate.ddl-auto=validate</code>. This is what the app connects to today.</div>
+  <div class="stack-item"><b>Database (target)</b>Azure SQL QuoteCenter baseline — local container <code>quotecenter-azure-sql</code> on <code>localhost:14330</code>. A <b>parallel track, not yet cut over</b>. Do not assume the backend talks to it.</div>
+  <div class="stack-item"><b>Migrations</b>Legacy MySQL: <code>dqs-backend/migration_*.sql</code>. Azure: <code>Documents/QuoteCenter/azure-sql/</code> — V001, V002 applied; V003 written but pending. Schema changes land in both.</div>
+  <div class="stack-item"><b>Config &amp; secrets</b><code>application.properties</code> imports <code>.env.local</code> (<code>spring.config.import=optional:file:.env.local[.properties]</code>) — DB credentials, OMS and membership base URLs, IDP client, GoSocket, PriceSmart Payments. Not in the repo; ask for it. <code>server.port</code> defaults to <code>8081</code>; the team runs <code>18081</code> via <code>SERVER_PORT</code>.</div>
+  <div class="stack-item"><b>Legacy reference</b>quotes-dqs-app (CodeIgniter 3) at <code>/Applications/XAMPP/xamppfiles/htdocs/html</code> — read-only, never branched for this work</div>
+  <div class="stack-item"><b>Conventions</b>English camelCase in JSON responses; legacy DB column names only in SQL; <code>@RequestMapping("/api/v1/...")</code>; new request-DTO fields always carry defaults; country logic goes in <code>util/ClubCapabilities.java</code>, never inline in a service</div>
+</div>
+
+<h2>What's already built</h2>
+<ul class="endpoint-list">
+  <li><span class="method get">GET</span><span class="ep-path">/api/v1/quotations</span><span class="ep-desc">— list with filters (status, period, userId)</span></li>
+  <li><span class="method get">GET</span><span class="ep-path">/api/v1/quotations/{id}</span><span class="ep-desc">— single quotation header</span></li>
+  <li><span class="method post">POST</span><span class="ep-path">/api/v1/quotations</span><span class="ep-desc">— create quotation header</span></li>
+  <li><span class="method patch">PATCH</span><span class="ep-path">/api/v1/quotations/{id}/close</span><span class="ep-desc">— close with status/paymentMethod/paymentNumber/quoteTypeId/ventanas</span></li>
+  <li><span class="method patch">PATCH</span><span class="ep-path">/api/v1/quotations/{id}/cancel</span><span class="ep-desc">— cancel with reasonId</span></li>
+  <li><span class="method post">POST</span><span class="ep-path">/api/v1/quotations/{id}/send-to-oms</span><span class="ep-desc">— send to OMS</span></li>
+  <li><span class="method get">GET</span><span class="ep-path">/api/v1/quotations/{id}/oms-status</span><span class="ep-desc">— OMS order status (raw; see B12 for typed contract)</span></li>
+  <li><span class="method get">GET</span><span class="ep-path">/api/v1/quotations/{id}/items</span><span class="ep-desc">— quote lines</span></li>
+  <li><span class="method post">POST</span><span class="ep-path">/api/v1/quotations/{id}/items</span><span class="ep-desc">— add item line</span></li>
+  <li><span class="method patch">PATCH</span><span class="ep-path">/api/v1/quotations/{id}/items/{itemId}/qty</span><span class="ep-desc">— update qty</span></li>
+  <li><span class="method delete">DELETE</span><span class="ep-path">/api/v1/quotations/{id}/items/{itemId}</span><span class="ep-desc">— delete line</span></li>
+  <li><span class="method get">GET</span><span class="ep-path">/api/v1/quotations/{id}/pdf</span><span class="ep-desc">— PDF generation</span></li>
+  <li><span class="method get">GET</span><span class="ep-path">/api/v1/items/{itemCode}/club/{clubId}</span><span class="ep-desc">— item lookup with clubsOnhand[]</span></li>
+  <li><span class="method get">GET</span><span class="ep-path">/api/v1/members/{membership}</span><span class="ep-desc">— member lookup by card number</span></li>
+  <li><span class="method get">GET</span><span class="ep-path">/api/v1/members/search</span><span class="ep-desc">— member search by name</span></li>
+  <li><span class="method get">GET</span><span class="ep-path">/api/v1/deliveries</span><span class="ep-desc">— delivery list for quotation</span></li>
+  <li><span class="method get">GET</span><span class="ep-path">/api/v1/deliveries/routes</span><span class="ep-desc">— routes by club</span></li>
+  <li><span class="method get">GET</span><span class="ep-path">/api/v1/deliveries/windows</span><span class="ep-desc">— delivery windows</span></li>
+  <li><span class="method post">POST</span><span class="ep-path">/api/v1/deliveries</span><span class="ep-desc">— save delivery data</span></li>
+  <li><span class="method get">GET</span><span class="ep-path">/api/v1/fiscal/validate</span><span class="ep-desc">— GoSocket NIT/CUI validation proxy</span></li>
+  <li><span class="method post">POST</span><span class="ep-path">/api/v1/fiscal/save</span><span class="ep-desc">— save fiscal record</span></li>
+  <li><span class="method get">GET</span><span class="ep-path">/api/v1/fiscal/data</span><span class="ep-desc">— get fiscal record for quotation</span></li>
+  <li><span class="method get">GET</span><span class="ep-path">/api/v1/fiscal/catalog/*</span><span class="ep-desc">— economic activities, cities, zones, neighborhoods, doc-types</span></li>
+  <li><span class="method get">GET</span><span class="ep-path">/api/v1/payments/methods</span><span class="ep-desc">— payment methods by country</span></li>
+  <li><span class="method get">GET</span><span class="ep-path">/api/v1/payments/cancel-reasons</span><span class="ep-desc">— close reasons</span></li>
+  <li><span class="method post">POST</span><span class="ep-path">/api/v1/payments/request</span><span class="ep-desc">— payment link generation</span></li>
+  <li><span class="method post">POST</span><span class="ep-path">/api/v1/payments/callback</span><span class="ep-desc">— payment webhook</span></li>
+  <li><span class="method get">GET</span><span class="ep-path">/api/v1/diag/stores</span><span class="ep-desc">— store list (interim diagnostic hack — replace with B4)</span></li>
+</ul>
+
+<h2>Backend work needed — priority table</h2>
+<div class="tablewrap"><table>
+<tr><th>#</th><th>Task</th><th>Legacy source</th><th>Spring Boot file to create/edit</th></tr>
+
+<tr>
+<td class="num">B1</td>
+<td>
+  <div class="step">Okta OIDC authentication</div>
+  <div style="margin-top:6px;font-size:12px;color:var(--muted)">Spring Security filter chain, <code>/oauth2/callback</code> endpoint, group gate <code>'B2B OSYS LoginDQS'</code>, JIT user provisioning by email into <code>users</code> table, JWT session token returned to frontend, <code>/api/v1/auth/me</code> returning <code>userId+clubId+role</code>. Frontend currently hardcodes <code>USER_ID=1</code> and has no auth headers on axios. <span style="color:var(--warn);font-weight:600">Deferred by explicit team decision — confirm before starting.</span> Dev and QA run without authentication so functional parity is not blocked. <b>Do not treat this as a blocker for B5, B10 or B14:</b> build those behind <code>quotecenter.auth.enabled=false</code>, taking user and role from the existing request contract, and switch on real role-gating when auth lands. If B1 gated them, the whole queue would stall on day one.</div>
+</td>
+<td class="detail"><code>Auth.php::okta_callback</code> (line ~149)</td>
+<td class="detail"><code>new SecurityConfig.java</code><br><code>new AuthController.java</code></td>
+</tr>
+
+<tr>
+<td class="num">B2</td>
+<td>
+  <div class="step">Quotations list enrichment</div>
+  <div style="margin-top:6px;font-size:12px;color:var(--muted)"><code>GET /api/v1/quotations</code> currently missing: item count per quote, quote type (OMS/FrontDesk), agent user name, delivery amount, status flag color (hex from <code>orders_status.flagcolor</code>), price variation flag (bool). Frontend shows <code>—</code> for all these fields.</div>
+</td>
+<td class="detail"><code>Model_orders::getOrdersDataStorefilter</code></td>
+<td class="detail"><code>QuotationController</code><br><code>QuotationService</code></td>
+</tr>
+
+<tr>
+<td class="num">B3</td>
+<td>
+  <div class="step">Deliveries (Envios) list endpoint <span style="color:var(--warn)">— partly built</span></div>
+  <div style="margin-top:6px;font-size:12px;color:var(--muted)"><b>Already exists — do not create a second one.</b> <code>GET /api/v1/quotations/deliveries?storeId=</code> is implemented in <code>QuotationController#listDeliveries</code>, and <code>DELETE /api/v1/deliveries/{quotationId}</code> already deletes without confirmation. <b>Real work:</b> verify the query ignores the status and period filters entirely (legacy Envios is unaffected by them), and align the field names to what the table renders: <code>hora, fechaEnvio, quotationId, memberName, deliveryAddress, fechaUsuario, userId</code>. Decide whether to keep the endpoint under <code>/quotations</code> or move it to <code>/deliveries</code>; if it moves, deprecate rather than delete — the frontend calls the current path.</div>
+</td>
+<td class="detail"><code>Orders::fetchOrdersDataStoreDeliveries</code></td>
+<td class="detail"><code>QuotationController#listDeliveries</code><br><code>DeliveryController</code> (already exist)</td>
+</tr>
+
+<tr>
+<td class="num">B4</td>
+<td>
+  <div class="step">Stores endpoint</div>
+  <div style="margin-top:6px;font-size:12px;color:var(--muted)">Replace <code>GET /api/v1/diag/stores</code> (diagnostics hack) with a real <code>GET /api/v1/stores</code> returning <code>id, name, countryIso2, currency, active</code> flag. <code>DiagController</code> is a temporary workaround — it must not be used in production.</div>
+</td>
+<td class="detail"><code>Admin_Controller</code> store list</td>
+<td class="detail"><code>new StoreController.java</code></td>
+</tr>
+
+<tr>
+<td class="num">B5</td>
+<td>
+  <div class="step">Club capabilities <span style="color:var(--warn)">— expose, do not rebuild</span></div>
+  <div style="margin-top:6px;font-size:12px;color:var(--muted)"><b><code>util/ClubCapabilities.java</code> already exists and is the single source of truth.</b> It resolves store-ID ranges for CO/PA/GT/CR/SV/HN/EC/TT/VI/AW/BB/JM/NI/PE (Honduras by explicit IDs 6601–6604) and carries the flags <code>quotecenter.payment-link.enabled</code>, <code>quotecenter.fel.enabled</code>, <code>quotecenter.delivery.enabled</code>, <code>quotecenter.pilot.enabled</code>. Creating a parallel service guarantees the two drift apart. <b>Real work:</b> add a thin controller exposing <code>GET /api/v1/clubs/{clubId}/capabilities</code> over the existing <code>forStore(storeId)</code>, extending the <code>Capabilities</code> record with what the frontend still lacks — <code>hasCallejas</code> (SLV 67xx), <code>currencySymbol</code>, <code>countryIso2</code>. <b>Correction:</b> the frontend no longer hardcodes <code>CARTAGO_STORE_ID=6409</code> — commit <code>efffba0</code> centralized it, and <code>src/constants/clubCapabilities.ts</code> mirrors this contract deliberately until the endpoint exists. Country ranges do still remain in <code>src/constants/quotation.ts:9,11</code> (CO, GT).</div>
+</td>
+<td class="detail"><code>clubcountries_helper.php</code><br><code>tipocotizacion_helper.php</code></td>
+<td class="detail"><code>util/ClubCapabilities.java</code> (exists)<br><code>new ClubCapabilitiesController.java</code></td>
+</tr>
+
+<tr>
+<td class="num">B6</td>
+<td>
+  <div class="step">Member data save (local override)</div>
+  <div style="margin-top:6px;font-size:12px;color:var(--muted)"><code>POST /api/v1/members/save-override</code> persisting address/phone/email/business overrides for a quotation (stored in <code>quotation_member_override</code> table, NOT modifying <code>ps_socios</code>). Frontend needs this for the 'Datos de membresía' edit modal (P10).</div>
+</td>
+<td class="detail"><code>Orders::savedatamembership</code></td>
+<td class="detail"><code>MemberController</code><br>+ schema migration (see Schema section)</td>
+</tr>
+
+<tr>
+<td class="num">B7</td>
+<td>
+  <div class="step">Quote comment save <span style="color:var(--warn)">— half of it already persists</span></div>
+  <div style="margin-top:6px;font-size:12px;color:var(--muted)"><b>The per-item comment column already exists:</b> <code>QuotationItem.icomments</code> maps <code>icomments VARCHAR(500)</code>. Only the <b>quote-level</b> comment has nowhere to go — <code>model/Quotation.java</code> has no comment column, which is why the frontend keeps it in <code>localStorage</code> (<code>db72900</code>) as a stopgap. <b>Real work:</b> add the header column, then expose <code>POST /api/v1/quotations/{id}/comment</code> with body <code>{text, itemId}</code> where <code>itemId=0</code> means quote-level and any other value writes <code>icomments</code>. ENTER-save is frontend behavior; the backend only persists.</div>
+</td>
+<td class="detail"><code>Orders::savecomment</code></td>
+<td class="detail"><code>QuotationController</code><br>+ schema migration (see Schema section)</td>
+</tr>
+
+<tr>
+<td class="num">B8</td>
+<td>
+  <div class="step">Include image flag <span style="color:var(--warn)">— column already exists</span></div>
+  <div style="margin-top:6px;font-size:12px;color:var(--muted)"><b>No new column needed.</b> <code>QuotationItem.includepic</code> already maps <code>includepic TINYINT</code>, and <code>QuotePdfService</code> already honors it when rendering. Adding a second <code>quotation_lines.include_image</code> column would split the same fact across two places. <b>Real work:</b> expose <code>PATCH /api/v1/quotations/{id}/items/{itemId}/include-image</code> body <code>{include: bool}</code> writing that existing column, and surface it on <code>QuotationItemResponse</code> so the Item Info drawer can render the checkbox in its saved state.</div>
+</td>
+<td class="detail"><code>Orders::saveincludepic</code></td>
+<td class="detail"><code>QuotationController</code><br>+ schema column (see Schema section)</td>
+</tr>
+
+<tr>
+<td class="num">B9</td>
+<td>
+  <div class="step">Email quote</div>
+  <div style="margin-top:6px;font-size:12px;color:var(--muted)"><code>POST /api/v1/quotations/{id}/email</code> sending the same HTML as the PDF to the member's email with subject <code>'PriceSmart :: Cotización No.: {id}'</code>. <code>QuotePdfService</code> already generates the HTML; needs SMTP/SES send layer.</div>
+</td>
+<td class="detail"><code>Orders.php sendPDFByEmail()</code><br><code>Orders::printDiv/{id}/2</code></td>
+<td class="detail"><code>PdfController</code> or <code>new EmailController.java</code></td>
+</tr>
+
+<tr>
+<td class="num">B10</td>
+<td>
+  <div class="step">Extend expiry date</div>
+  <div style="margin-top:6px;font-size:12px;color:var(--muted)"><code>PATCH /api/v1/quotations/{id}/extend-expiry</code> adding exactly 21 days to the expiry date, no body. Role-gated (<code>role_id != 4</code>). Depends on B1 for role information in JWT.</div>
+</td>
+<td class="detail"><code>Orders::extenderfecha</code></td>
+<td class="detail"><code>QuotationController</code></td>
+</tr>
+
+<tr>
+<td class="num">B11</td>
+<td>
+  <div class="step">Payment link status persist</div>
+  <div style="margin-top:6px;font-size:12px;color:var(--muted)">Payment state (PENDING/PAID/EXPIRED/invoiceId) must be stored server-side in <code>quotation_payment_state</code> table. <code>GET /api/v1/payments/status?quotationId=X</code> returns current state. Currently state is lost on page refresh. V003 migration already written but not applied — apply it first.</div>
+</td>
+<td class="detail"><code>Orders</code> payment link section</td>
+<td class="detail"><code>PaymentController</code><br>+ apply V003 migration</td>
+</tr>
+
+<tr>
+<td class="num">B12</td>
+<td>
+  <div class="step">OMS status typed contract</div>
+  <div style="margin-top:6px;font-size:12px;color:var(--muted)"><code>GET /api/v1/quotations/{id}/oms-status</code> currently returns raw OMS JSON. Define a typed response: <code>{orderId, status, message, timestamp}</code>. Frontend <code>StepDone</code> uses fragile regex heuristics to extract orderId — this removes that brittleness.</div>
+</td>
+<td class="detail"><code>orders/buscarcotizacionv2</code></td>
+<td class="detail"><code>OmsService</code><br><code>QuotationController</code></td>
+</tr>
+
+<tr>
+<td class="num">B13</td>
+<td>
+  <div class="step">Quotation summary endpoint <span style="color:var(--warn)">— already built, needs verification</span></div>
+  <div style="margin-top:6px;font-size:12px;color:var(--muted)"><b>Already exists.</b> <code>GET /api/v1/quotations/summary</code> is implemented in <code>QuotationController#summary</code>, backed by <code>QuotationListRepository#findSummaryByStatus(storeId, periodId)</code>. <b>Real work:</b> verify rather than build — confirm the Pendiente count really is returned <i>without</i> the period restriction (legacy counts it across all periods), and that the response carries both count and summed total per status with the <code>fa-circle</code> color for each.</div>
+</td>
+<td class="detail"><code>Orders::resumencotizaciones</code></td>
+<td class="detail"><code>QuotationController</code></td>
+</tr>
+
+<tr>
+<td class="num">B14</td>
+<td>
+  <div class="step">Move to FrontDesk</div>
+  <div style="margin-top:6px;font-size:12px;color:var(--muted)"><code>PATCH /api/v1/quotations/{id}/move-to-frontdesk</code> — silent downgrade when OMS pre-flight checklist fails (any membership/address/inventory failure). No body required. Role-gated — depends on B1.</div>
+</td>
+<td class="detail"><code>index.php chechklistorder()</code></td>
+<td class="detail"><code>QuotationController</code></td>
+</tr>
+
+<tr>
+<td class="num">B15</td>
+<td>
+  <div class="step">Callejas bulk import (SLV 67xx only)</div>
+  <div style="margin-top:6px;font-size:12px;color:var(--muted)"><code>POST /api/v1/quotations/{id}/import-callejas</code> accepting a PDF body, parsing #Item+Qty pairs, adding lines in bulk. Gate behind <code>ClubCapabilities.hasCallejas</code>. Only applies to El Salvador 67xx clubs.</div>
+</td>
+<td class="detail">SLV-specific drawer in <code>edit.php</code></td>
+<td class="detail"><code>new CallejasController.java</code></td>
+</tr>
+
+<tr>
+<td class="num">B16</td>
+<td>
+  <div class="step">Ring / Caja are persisted in the wrong place <span style="color:var(--bad)">— decision needed</span></div>
+  <div style="margin-top:6px;font-size:12px;color:var(--muted)"><code>DeliveryService.java:77-93</code> writes <code>ring</code> and <code>box</code> into <code>quotation_delivery</code>. In legacy DQS both fields belong to the <b>Front Desk sale panel</b>, not the Envio form — a Front Desk sale can have no delivery at all, and then the two values have nowhere to live. <code>QuotationPayment</code> has no equivalent columns, so today the frontend validates Ring/Caja (commit <code>7a877ac</code>) and nothing persists them. <b>Work:</b> add <code>ring</code> and <code>box</code> to <code>quotation_payment</code>, extend <code>CloseQuotationRequest</code> additively (it already carries <code>quoteTypeId</code>, <code>paymentNumber</code>, <code>paymentMethodId</code>, all with defaults), and enforce server-side that both are present when <code>quoteTypeId</code> = Front Desk. Keep the delivery columns during the transition; drop them only once the frontend stops writing them.</div>
+</td>
+<td class="detail"><code>edit.php</code> #sale panel 952-1048</td>
+<td class="detail"><code>QuotationPayment</code><br><code>CloseQuotationRequest</code><br><code>DeliveryService</code> + migration</td>
+</tr>
+
+<tr>
+<td class="num">B17</td>
+<td>
+  <div class="step">Delivery route tariffs</div>
+  <div style="margin-top:6px;font-size:12px;color:var(--muted)"><code>DeliveryService#getRoutes</code> returns only <code>id</code>, <code>name</code>, <code>truckSize</code>, <code>routeTypeName</code>, <code>routeTypeCode</code> from <code>ps_rutas</code>. The legacy 'Costo por ruta' panel also shows Tarifa por pallet / ½ pallet / ¼ pallet, Mínimas requeridas and Tipo de Ruta — the frontend panel is built (P8) and currently has nothing to display. <b>Work:</b> extend the projection with the tariff and minimum-required columns. Informational only: it is displayed, never used to compute the delivery price, which stays API-calculated and read-only. Also expose a per-country <b>delivery</b> Ciudad catalog — the existing cities list sits under <code>/fiscal/catalog/cities</code> and is fiscal-scoped, which is the wrong contract for the Envio form.</div>
+</td>
+<td class="detail"><code>edit.php</code> delivery block 709-864</td>
+<td class="detail"><code>DeliveryService</code><br><code>DeliveryController</code></td>
+</tr>
+
+<tr>
+<td class="num">B18</td>
+<td>
+  <div class="step">Pre-OMS checklist endpoint</div>
+  <div style="margin-top:6px;font-size:12px;color:var(--muted)">B14 defines the silent Front Desk downgrade, but nothing computes the checklist that triggers it. <b>Work:</b> add <code>GET /api/v1/quotations/{id}/oms-checklist</code> returning per-check pass/fail for membership active, email present, address present and item OnHand, including the list of insufficient items so the modal can table them. The double-entry comprobante/pago confirmation stays in the frontend, but the values it compares against must come from the server, not from what the user typed earlier in the session.</div>
+</td>
+<td class="detail"><code>index.php</code> checklistModal + <code>chechklistorder()</code></td>
+<td class="detail"><code>QuotationController</code><br><code>OmsService</code></td>
+</tr>
+
+<tr>
+<td class="num">B19</td>
+<td>
+  <div class="step">PDF sort parameter</div>
+  <div style="margin-top:6px;font-size:12px;color:var(--muted)"><code>GET /quotations/{id}/pdf</code> takes no sort parameter; legacy lets the user order lines by Departamento (default), Categoria, Item or Descripción before printing. <b>Work:</b> accept <code>?sort=</code> with those four values, and apply the country-specific totals layout plus the conditional marketing footer (voseo variant for CR/NI, delivery disclaimer) that legacy renders below the e-commerce threshold.</div>
+</td>
+<td class="detail"><code>Orders::printDiv/{id}/1/{sort}</code></td>
+<td class="detail"><code>PdfController</code><br><code>QuotePdfService</code></td>
+</tr>
+
+</table></div>
+
+<h2>Schema work needed</h2>
+<div class="note" style="border-left-color:var(--bad)"><b>Two rules before writing any migration.</b><br>
+1 · <b><code>ddl-auto=validate</code></b> — Hibernate creates and alters nothing. An entity field without its column does not fail at query time, it <b>fails application startup</b>. The migration must ship in the same commit as the entity change.<br>
+2 · <b>Every schema change lands twice.</b> The running backend points at the legacy MySQL DQS database, while the QuoteCenter Azure SQL baseline is a parallel track under <code>Documents/QuoteCenter/azure-sql/</code> (<code>V001__initial_schema.sql</code>, <code>V002__legacy_reference_data.sql</code> — 13 countries, 61 clubs, 61 settings, 6 statuses — plus <code>MigrationRunner.java</code> which applies V001–V003 automatically). Each change from B6, B7, B8, B11 and B16 needs a legacy MySQL migration <i>and</i> a new Azure <code>V00x</code>, or the two schemas silently diverge before cutover. Memberships, prices and inventory were deliberately excluded from V002 because they stay API-owned — keep it that way.</div>
+<div class="tablewrap"><table>
+<tr><th>Item</th><th>Description</th><th>Status</th></tr>
+<tr>
+<td class="num">V003</td>
+<td><div class="step">quotation_payment_state table</div><div style="margin-top:4px;font-size:12px;color:var(--muted)">Migration already written at <code>Documents/QuoteCenter/azure-sql/V003__quotation_payment_state.sql</code>. Not yet applied. Required for B11.</div></td>
+<td><span class="badge differs">PENDING — apply now</span></td>
+</tr>
+<tr>
+<td class="num">V004</td>
+<td><div class="step">quotation_member_override table</div><div style="margin-top:4px;font-size:12px;color:var(--muted)">Stores per-quotation member address/phone/email/business overrides without touching <code>ps_socios</code>. Required for B6. Fields: <code>quotation_id, address, mobile, email, business_name, updated_at</code>.</div></td>
+<td><span class="badge missing">NOT WRITTEN</span></td>
+</tr>
+<tr>
+<td class="num">V005</td>
+<td><div class="step">Quotation header comment column</div><div style="margin-top:4px;font-size:12px;color:var(--muted)"><b>Scope corrected:</b> no comments table and no <code>include_image</code> column are needed. Per-item comments already persist in <code>QuotationItem.icomments</code> (<code>VARCHAR(500)</code>) and the image flag already persists in <code>QuotationItem.includepic</code> (<code>TINYINT</code>) — a separate table would split the same fact in two. What is genuinely missing is a <b>quote-level</b> comment column on the quotation header, which <code>model/Quotation.java</code> does not have. Required for B7.</div></td>
+<td><span class="badge missing">NOT WRITTEN</span></td>
+</tr>
+<tr>
+<td class="num">V006</td>
+<td><div class="step">quotation_payment.ring / quotation_payment.box</div><div style="margin-top:4px;font-size:12px;color:var(--muted)">Front Desk Ring and Caja, moved off <code>quotation_delivery</code> where <code>DeliveryService</code> writes them today. Required for B16. Keep the delivery columns until the frontend stops writing them.</div></td>
+<td><span class="badge missing">NOT WRITTEN</span></td>
+</tr>
+</table></div>
+
+<h2>Coordination rules</h2>
+<div class="coord-grid">
+  <div class="coord-card">
+    <h4>Adding fields to existing responses</h4>
+    Add new fields as nullable — the frontend handles missing fields gracefully and shows <code>—</code>. Do not remove or rename existing response fields without a frontend PR coordinated first.
+  </div>
+  <div class="coord-card">
+    <h4>Naming conventions</h4>
+    English camelCase in all JSON responses. Legacy DB column names (<code>snake_case</code>) stay in SQL only. Do not leak DB column names into the API contract.
+  </div>
+  <div class="coord-card">
+    <h4>Endpoint pattern</h4>
+    Follow the existing pattern: <code>@RequestMapping("/api/v1/...")</code>, JdbcTemplate queries, no ORM, explicit SQL. New services go in <code>src/main/java/.../service/</code>.
+  </div>
+  <div class="coord-card">
+    <h4>Auth dependency chain</h4>
+    B1 (auth) must ship before B5 (ClubCapabilities), B10 (member panel), and B14 (move-to-frontdesk) — all require a valid <code>role_id</code> from the JWT.
+  </div>
+  <div class="coord-card">
+    <h4>V003 migration — apply first</h4>
+    <code>V003__quotation_payment_state.sql</code> is already written and must be applied to the local container before building B11. Coordinate with the frontend dev — they cannot test payment state persistence until V003 is live in the shared dev DB.
+  </div>
+  <div class="coord-card">
+    <h4>Legacy reference app</h4>
+    When in doubt about expected behavior, read the CodeIgniter source at <code>/Applications/XAMPP/xamppfiles/htdocs/html/application/</code>. Controllers are in <code>controllers/Orders.php</code>; models in <code>models/Model_orders.php</code>.
+  </div>
+</div>
+
+<div class="notouch">
+  <h3>Do NOT touch — frontend developer owns these files</h3>
+  <ul>
+    <li>src/ in dqs-frontend — all React components</li>
+    <li>src/lib/i18n.ts — Spanish string dictionary</li>
+    <li>src/constants/quotation.ts — QUOTE_TYPE_* constants</li>
+    <li>Any .tsx / .ts file under dqs-frontend/src/</li>
+  </ul>
+</div>
+</div>
+</body>
+</html>

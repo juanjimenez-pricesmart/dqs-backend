@@ -1,0 +1,17 @@
+# Build output
+target/
+
+# macOS
+.DS_Store
+
+# Local tooling / editor config
+.claude/
+
+# Secrets — never commit
+.env.local
+.env.local.properties
+*.env.local
+
+# Nested clones: the frontend lives at ~/quotecenter/dqs-frontend,
+# never inside this repository
+api/dqs-frontend/
