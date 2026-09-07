@@ -5868,134 +5868,141 @@ WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_l
 GO
 
 -- ── fiscal_document_types (ex ps_fel) ────────────────────────────────────
+-- The id is the legacy felid, inserted explicitly rather than generated.
+-- It is persisted data: quotation_fiscal.document_type holds the felid, not
+-- the code, so letting IDENTITY assign new numbers would orphan every fiscal
+-- record already saved. felid is a global primary key in ps_fel, so the
+-- values are unique here too.
+SET IDENTITY_INSERT dbo.fiscal_document_types ON;
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'BB') AS cid, N'National ID' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'National ID', N'ID Nacional', N'99999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (27, s.cid, s.code, N'National ID', N'ID Nacional', N'99999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'BB') AS cid, N'Passport' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'Passport', N'Pasaporte', N'999999999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (28, s.cid, s.code, N'Passport', N'Pasaporte', N'999999999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'CO') AS cid, N'NIT' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'NIT', N'NIT', N'9999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (18, s.cid, s.code, N'NIT', N'NIT', N'9999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'CO') AS cid, N'ID' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'ID', N'Cedula', N'9999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (19, s.cid, s.code, N'ID', N'Cedula', N'9999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'CO') AS cid, N'Passport' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'Passport', N'Pasaporte', N'999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (20, s.cid, s.code, N'Passport', N'Pasaporte', N'999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'CR') AS cid, N'PHYSICAL' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'PHYSICAL', N'Cedula Fisica', N'999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (1, s.cid, s.code, N'PHYSICAL', N'Cedula Fisica', N'999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'CR') AS cid, N'LEGAL' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'LEGAL', N'Cedula Juridica', N'**********');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (2, s.cid, s.code, N'LEGAL', N'Cedula Juridica', N'**********');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'CR') AS cid, N'DIMEX' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'DIMEX', N'Dimex', N'99999999999[9]');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (3, s.cid, s.code, N'DIMEX', N'Dimex', N'99999999999[9]');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'CR') AS cid, N'NITE' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'NITE', N'Nite', N'9999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (4, s.cid, s.code, N'NITE', N'Nite', N'9999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'DO') AS cid, N'Identification Card' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'Identification Card', N'Cedula', N'99999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (16, s.cid, s.code, N'Identification Card', N'Cedula', N'99999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'DO') AS cid, N'RNC' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'RNC', N'RNC', N'999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (17, s.cid, s.code, N'RNC', N'RNC', N'999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'GT') AS cid, N'NIT' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'NIT', N'NIT', N'999999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (5, s.cid, s.code, N'NIT', N'NIT', N'999999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'GT') AS cid, N'CUI' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'CUI', N'CUI', N'999999999999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (6, s.cid, s.code, N'CUI', N'CUI', N'999999999999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'GT') AS cid, N'Passport' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'Passport', N'Pasaporte', N'999999999999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (7, s.cid, s.code, N'Passport', N'Pasaporte', N'999999999999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'GT') AS cid, N'End Consumer' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'End Consumer', N'Consumidor Final', N'');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (25, s.cid, s.code, N'End Consumer', N'Consumidor Final', N'');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'HN') AS cid, N'RTN' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'RTN', N'RTN', N'99999999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (21, s.cid, s.code, N'RTN', N'RTN', N'99999999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'HN') AS cid, N'Identity Card' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'Identity Card', N'Identidad', N'9999999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (22, s.cid, s.code, N'Identity Card', N'Identidad', N'9999999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'HN') AS cid, N'Foreign ID Card' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'Foreign ID Card', N'Carnet de Extranjería', N'999999999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (24, s.cid, s.code, N'Foreign ID Card', N'Carnet de Extranjería', N'999999999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'JM') AS cid, N'Passport' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'Passport', N'Pasaporte', N'999999999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (23, s.cid, s.code, N'Passport', N'Pasaporte', N'999999999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'JM') AS cid, N'Tax Registration Number' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'Tax Registration Number', N'TRN', N'999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (29, s.cid, s.code, N'Tax Registration Number', N'TRN', N'999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'JM') AS cid, N'National ID' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'National ID', N'ID Nacional', N'999999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (30, s.cid, s.code, N'National ID', N'ID Nacional', N'999999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'PA') AS cid, N'ID' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'ID', N'ID', N'9999999999999999999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (13, s.cid, s.code, N'ID', N'ID', N'9999999999999999999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'PA') AS cid, N'Passport' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'Passport', N'Pasaporte', N'9999999999999999999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (14, s.cid, s.code, N'Passport', N'Pasaporte', N'9999999999999999999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'PA') AS cid, N'RUC' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'RUC', N'RUC', N'99999999999999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (15, s.cid, s.code, N'RUC', N'RUC', N'99999999999999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'SV') AS cid, N'Residence Card' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'Residence Card', N'Carnet de Residencia', N'9999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (8, s.cid, s.code, N'Residence Card', N'Carnet de Residencia', N'9999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'SV') AS cid, N'DUI' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'DUI', N'DUI', N'999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (9, s.cid, s.code, N'DUI', N'DUI', N'999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'SV') AS cid, N'NIT' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'NIT', N'NIT', N'99999999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (10, s.cid, s.code, N'NIT', N'NIT', N'99999999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'SV') AS cid, N'Passport' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'Passport', N'Pasaporte', N'99999999999999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (11, s.cid, s.code, N'Passport', N'Pasaporte', N'99999999999999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'SV') AS cid, N'Other' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'Other', N'Otro', N'99999999999999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (12, s.cid, s.code, N'Other', N'Otro', N'99999999999999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'TT') AS cid, N'National ID' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'National ID', N'ID Nacional', N'99999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (35, s.cid, s.code, N'National ID', N'ID Nacional', N'99999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'TT') AS cid, N'BIR Tax Number' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'BIR Tax Number', N'BIR Number', N'999999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (36, s.cid, s.code, N'BIR Tax Number', N'BIR Number', N'999999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'TT') AS cid, N'Passport' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'Passport', N'Pasaporte', N'999999999999999');
+WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)
+     VALUES (37, s.cid, s.code, N'Passport', N'Pasaporte', N'999999999999999');
+SET IDENTITY_INSERT dbo.fiscal_document_types OFF;
 GO
 
 -- ── payment methods (ex orders_pago) ─────────────────────────────────────

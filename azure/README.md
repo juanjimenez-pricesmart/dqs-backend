@@ -76,6 +76,28 @@ like a successful one.
 SQL Server 2022 is a close proxy for Azure SQL for DDL of this kind, but it is a
 proxy. Run it once on a scratch Azure database before the real one.
 
+## Identifiers that had to survive the move
+
+Some of these catalog values are **stored on quotations**, so changing the id
+space would orphan existing records. Checked one by one against the live data:
+
+| Catalog | What a quotation stores | Survives? |
+|---|---|---|
+| Routes | `quotation_delivery.route_id` = the legacy `llave`, e.g. `6101 01` | Yes — kept as `routes.code` |
+| Payment methods | `quotation_payment.payment_method_id` = the **tender key**, not `pago_id` | Yes — kept as `country_payment_methods.tender_key` |
+| Fiscal document types | `quotation_fiscal.document_type` = the **`felid`**, not the code | Only because the import forces it |
+
+That last one is the reason `03_import.sql` inserts fiscal document types with
+`SET IDENTITY_INSERT ... ON` and an explicit `id` equal to `felid`. Letting
+IDENTITY assign fresh numbers would have left every saved fiscal record pointing
+at whatever type happened to land on that number. `felid` is a global primary
+key in `ps_fel`, so the values stay unique here.
+
+The deduplication is safe alongside it: the only duplicate is Jamaica's
+`Passport` (felid 23 and 31), 23 wins, and neither is referenced by any
+quotation. The values actually in use — 1 (Costa Rica PHYSICAL) and 19
+(Colombia ID) — both survive.
+
 ## Rows the import omits, on purpose
 
 Filtered out **when the script is generated**, so the expected counts are what a

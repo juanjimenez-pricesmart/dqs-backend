@@ -186,12 +186,19 @@ public class Export {
         w.println("GO\n");
 
         // fiscal document types
-        w.println("-- ── fiscal_document_types (ex ps_fel) ────────────────────────────────────");
+        w.println("""
+            -- ── fiscal_document_types (ex ps_fel) ────────────────────────────────────
+            -- The id is the legacy felid, inserted explicitly rather than generated.
+            -- It is persisted data: quotation_fiscal.document_type holds the felid, not
+            -- the code, so letting IDENTITY assign new numbers would orphan every fiscal
+            -- record already saved. felid is a global primary key in ps_fel, so the
+            -- values are unique here too.
+            SET IDENTITY_INSERT dbo.fiscal_document_types ON;""");
         rs = c.createStatement().executeQuery(
             // Deduplicated at source: (country, nombre_en) is the unique key on the
             // target, and ps_fel has repeats — JM 'Passport' twice, for one. Lowest
             // felid wins, which is the row the legacy dropdown showed first.
-            "SELECT pais_iso2, nombre_en, MIN(nombre_es) nombre_es, MIN(formato) formato " +
+            "SELECT pais_iso2, nombre_en, MIN(nombre_es) nombre_es, MIN(formato) formato, MIN(felid) felid " +
             "FROM ps_fel WHERE pais_iso2 IS NOT NULL AND nombre_en IS NOT NULL " +
             "GROUP BY pais_iso2, nombre_en ORDER BY pais_iso2, MIN(felid)");
         int nf = 0;
@@ -199,11 +206,12 @@ public class Export {
             w.printf("MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = %s) AS cid, %s AS code) AS s%n",
                 q(rs.getString(1)), q(rs.getString(2)));
             w.printf("  ON t.country_id = s.cid AND t.code = s.code%n");
-            w.printf("WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)%n");
-            w.printf("     VALUES (s.cid, s.code, %s, %s, %s);%n",
-                q(rs.getString(2)), q(rs.getString(3)), q(rs.getString(4)));
+            w.printf("WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (id, country_id, code, name_en, name_es, input_mask)%n");
+            w.printf("     VALUES (%d, s.cid, s.code, %s, %s, %s);%n",
+                rs.getInt(5), q(rs.getString(2)), q(rs.getString(3)), q(rs.getString(4)));
             nf++;
         }
+        w.println("SET IDENTITY_INSERT dbo.fiscal_document_types OFF;");
         w.println("GO\n");
 
         // payment methods
