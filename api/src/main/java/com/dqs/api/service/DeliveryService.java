@@ -122,16 +122,55 @@ public class DeliveryService {
 
     // ── Routes for a store ────────────────────────────────────────────────────
 
+    /**
+     * Routes for a club, with the tariffs the "Costo por ruta" panel shows.
+     *
+     * Legacy fetches those separately, one request per route selection
+     * (orders/getrouteinfo → Model_orders::getrutaid). They come from the same
+     * ps_rutas row the list already reads, so they ride along here instead:
+     * the panel is informational and the extra round trip bought nothing.
+     *
+     * The tariff columns are legacy's own names — `14pallet_local` starts with
+     * a digit and has to be quoted.
+     */
     public List<Map<String, Object>> getRoutes(Integer storeId) {
         log.info("[DeliveryService] getRoutes storeId={}", storeId);
         return jdbcTemplate.queryForList(
             "SELECT A.llave AS id, A.descripcion AS name, A.truck_size AS truckSize, " +
+            "A.pallet_local AS palletRate, A.pallet_required AS palletMinimum, " +
+            "A.halfpallet_local AS halfPalletRate, A.halfpallet_required AS halfPalletMinimum, " +
+            "A.`14pallet_local` AS quarterPalletRate, A.`14pallet_usd` AS quarterPalletRateUsd, " +
             "TR.nombre AS routeTypeName, TR.codigo AS routeTypeCode " +
             "FROM ps_rutas A " +
             "LEFT JOIN ps_tipos_ruta TR ON A.tipo_ruta_id = TR.id AND TR.status = 'A' " +
             "WHERE A.ps_tienda_id = ? AND A.status = 'A' " +
             "ORDER BY A.llave",
             storeId);
+    }
+
+    /**
+     * The address of the member's most recent delivery, to prefill the form.
+     *
+     * Legacy's query is Model_orders::getLastDeliveryAddress, and it orders
+     * `fecha_entrega ASC LIMIT 1` — which returns the OLDEST address, not the
+     * last one, despite the name. That reads as a typo rather than a decision:
+     * a member who moved would be offered an address they left years ago,
+     * forever. This orders DESC. Flip it if byte-parity matters more.
+     *
+     * Only sold quotations count (status 3), as legacy does.
+     */
+    public String getLastDeliveryAddress(String membership) {
+        log.info("[DeliveryService] getLastDeliveryAddress membership={}", membership);
+        List<String> found = jdbcTemplate.queryForList(
+            "SELECT d.address " +
+            "FROM quotations q " +
+            "JOIN quotation_customers c ON c.quotation_id = q.id " +
+            "JOIN quotation_delivery  d ON d.quotation_id = q.id " +
+            "WHERE c.customer_membership = ? AND q.status_id = 3 " +
+            "  AND d.address IS NOT NULL AND d.address <> '' " +
+            "ORDER BY d.delivery_date DESC LIMIT 1",
+            String.class, membership);
+        return found.isEmpty() ? "" : found.get(0);
     }
 
     // ── Get delivery metadata ─────────────────────────────────────────────────
