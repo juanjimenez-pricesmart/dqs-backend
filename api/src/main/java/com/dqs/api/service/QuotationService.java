@@ -234,7 +234,9 @@ public class QuotationService {
                 }
             }
 
-            if (DeliveryService.DELIVERY_PRODUCT_ID.equals(code)) {
+            // Owned by its own panel: a plain add would leave a line with no
+            // backing record behind it.
+            if (com.dqs.api.util.SpecialItems.has(code, com.dqs.api.util.SpecialItems.Trait.OWNED_BY_PANEL)) {
                 skipped.add(code);
                 continue;
             }
