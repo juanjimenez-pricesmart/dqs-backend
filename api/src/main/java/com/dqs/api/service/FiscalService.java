@@ -196,7 +196,13 @@ public class FiscalService {
 
     public List<Map<String, Object>> getDocTypes(String country) {
         return jdbcTemplate.queryForList(
-            "SELECT felid, nombre_es AS descripcion, formato FROM ps_fel WHERE pais_iso2 = ? ORDER BY nombre_es",
+            // nombre_en is the document's type code — NIT, CUI, PHYSICAL, LEGAL,
+            // DIMEX, NITE — which is what the per-type number validation keys
+            // off. Legacy carries it on the option as data-type; without it the
+            // frontend can only match on the Spanish label, which is a display
+            // string and free to change.
+            "SELECT felid, nombre_es AS descripcion, nombre_en AS typeCode, formato " +
+            "FROM ps_fel WHERE pais_iso2 = ? ORDER BY nombre_es",
             country);
     }
 }
