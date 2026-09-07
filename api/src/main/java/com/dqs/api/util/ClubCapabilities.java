@@ -14,6 +14,20 @@ import org.springframework.stereotype.Component;
 public class ClubCapabilities {
 
     // ── Country/region store ID ranges ────────────────────────────────────────
+    //
+    // These bounds are INCLUSIVE, and that is a deliberate divergence from
+    // legacy DQS — confirmed with the PO. Legacy tests Colombia as
+    // `6100 < storeId && storeId < 6199` (views/orders/edit.php ~line 565),
+    // excluding both ends, so clubs 6100 and 6199 fall through to the generic
+    // branch there. Inclusive is the correct behavior; the legacy comparison is
+    // an off-by-one.
+    //
+    // This is not cosmetic: the Colombia range drives the tax treatment, which
+    // totals variant the quote renders, and whether the Exención % column is
+    // shown. Do not "correct" it back to match legacy.
+    //
+    // The frontend mirrors these bounds in src/constants/quotation.ts. Keep the
+    // two in step.
     private static final int COLOMBIA_MIN    = 6100; private static final int COLOMBIA_MAX    = 6199;
     private static final int PANAMA_MIN      = 6200; private static final int PANAMA_MAX      = 6299;
     private static final int GUATEMALA_MIN   = 6300; private static final int GUATEMALA_MAX   = 6399;
