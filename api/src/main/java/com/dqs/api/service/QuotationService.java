@@ -29,12 +29,14 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class QuotationService {
 
+
     private final QuotationRepository quotationRepository;
     private final QuotationItemRepository quotationItemRepository;
     private final com.dqs.api.repository.QuotationCancelRepository quotationCancelRepository;
     private final OmsService omsService;
     private final OmsPayloadBuilder omsPayloadBuilder;
     private final ObjectMapper objectMapper;
+    private final ItemService itemService;
 
     @Value("${idp.base-url}")
     private String idpBaseUrl;
@@ -184,6 +186,123 @@ public class QuotationService {
         QuotationItem saved = quotationItemRepository.save(item);
         log.info("[QuotationService] item saved id={} quotation_id={} product_id={}", saved.getId(), quotationId, saved.getProductId());
         return toItemResponse(saved);
+    }
+
+    // ── Bulk add (Copy & Paste Excel) ─────────────────────────────────────
+
+    /**
+     * Adds many lines at once from pasted spreadsheet rows.
+     *
+     * The client sends only code and quantity — the catalog lookup happens
+     * here, exactly as legacy's orders/csvcreardetalle does. Doing it in the
+     * browser would mean two round trips per code, so fifty pasted rows would
+     * be a hundred requests.
+     *
+     * Legacy quantity rules are preserved: an empty or zero quantity becomes 1,
+     * and a code already on the quotation has its quantity SUMMED. saveItem on
+     * its own replaces the quantity — the single-add path sums in the browser
+     * before calling it — so the sum is done here.
+     *
+     * Codes the catalog does not know are reported back rather than failing the
+     * whole paste; legacy lists them under "Items no copiados". The delivery
+     * SKU is reported separately: adding it as a plain line would leave a row
+     * with no quotation_delivery record behind it, which no screen can then
+     * edit. It belongs to the Envio form.
+     */
+    @Transactional
+    public java.util.Map<String, Object> addItemsBulk(Long quotationId, Integer clubId,
+                                                      List<java.util.Map<String, Object>> lines) {
+        findOrThrow(quotationId);
+
+        List<String> added = new java.util.ArrayList<>();
+        List<String> notFound = new java.util.ArrayList<>();
+        List<String> skipped = new java.util.ArrayList<>();
+
+        for (java.util.Map<String, Object> line : lines) {
+            Object codeRaw = line.get("productId");
+            if (codeRaw == null || codeRaw.toString().isBlank()) continue;
+            String code = codeRaw.toString().trim();
+
+            BigDecimal qty = BigDecimal.ONE;
+            Object qtyRaw = line.get("qty");
+            if (qtyRaw != null && !qtyRaw.toString().isBlank()) {
+                try {
+                    BigDecimal parsed = new BigDecimal(qtyRaw.toString().trim());
+                    if (parsed.compareTo(BigDecimal.ZERO) > 0) qty = parsed;
+                } catch (NumberFormatException ignored) {
+                    // Legacy treats anything unparseable as the default of 1.
+                }
+            }
+
+            if (DeliveryService.DELIVERY_PRODUCT_ID.equals(code)) {
+                skipped.add(code);
+                continue;
+            }
+
+            java.util.Map<String, Object> catalog;
+            try {
+                catalog = itemService.getItemByCode(code, clubId);
+            } catch (Exception e) {
+                log.warn("[QuotationService] bulk: catalog lookup failed for {}: {}", code, e.getMessage());
+                notFound.add(code);
+                continue;
+            }
+            if (catalog == null || catalog.get("item_code") == null) {
+                notFound.add(code);
+                continue;
+            }
+
+            // Sum into an existing line, as legacy does for a repeated code.
+            BigDecimal finalQty = quotationItemRepository
+                    .findByQuotation_IdAndProductId(quotationId, code)
+                    .map(existing -> coalesce(existing.getQty(), BigDecimal.ZERO))
+                    .orElse(BigDecimal.ZERO)
+                    .add(qty);
+
+            saveItem(quotationId, toItemRequest(catalog, finalQty));
+            added.add(code);
+        }
+
+        log.info("[QuotationService] addItemsBulk quotation_id={} added={} notFound={} skipped={}",
+                quotationId, added.size(), notFound.size(), skipped.size());
+        return java.util.Map.of("added", added, "notFound", notFound, "skipped", skipped);
+    }
+
+    /** Maps a catalog row onto the same request shape a single add uses. */
+    private QuotationItemRequest toItemRequest(java.util.Map<String, Object> c, BigDecimal qty) {
+        QuotationItemRequest req = new QuotationItemRequest();
+        req.setProductId(str(c.get("item_code")));
+        req.setDescription(str(c.get("description")).trim());
+        req.setQty(qty);
+        req.setRate(dec(c.get("sellPrice")));
+        req.setSignPrice(dec(c.get("sign_price")));
+        // The catalog carries IVA and VAT side by side; whichever is populated
+        // is the one that applies, matching what the single-add path sends.
+        req.setTaxPorcentaje(nonZero(dec(c.get("iva_Percent")), dec(c.get("vat_Percent"))));
+        req.setTaxFactor(nonZero(dec(c.get("iva_Amount")), dec(c.get("vat_Amount"))));
+        req.setTaxIco(dec(c.get("ico_Amount")));
+        req.setCuEa(dec(c.get("cu_EA")));
+        req.setPl(dec(c.get("pl")));
+        req.setWeightEa(dec(c.get("weight_EA_KG")));
+        req.setOnhand(dec(c.get("quantityOnHand")));
+        req.setSoldByWeight(str(c.get("soldByWeight")));
+        req.setRecipe(str(c.get("recipe")));
+        req.setStorageType(str(c.get("storageType")));
+        req.setPicture1(str(c.get("image1")).trim());
+        req.setDepartment(str(c.get("department")));
+        req.setCategory(str(c.get("category")));
+        return req;
+    }
+
+    private static String str(Object o) { return o == null ? "" : o.toString(); }
+
+    private static BigDecimal dec(Object o) {
+        if (o == null) return BigDecimal.ZERO;
+        try { return new BigDecimal(o.toString()); } catch (NumberFormatException e) { return BigDecimal.ZERO; }
+    }
+
+    private static BigDecimal nonZero(BigDecimal a, BigDecimal b) {
+        return a != null && a.compareTo(BigDecimal.ZERO) != 0 ? a : b;
     }
 
     // ── Update item qty ───────────────────────────────────────────────────

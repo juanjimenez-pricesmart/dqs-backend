@@ -110,6 +110,21 @@ public class QuotationController {
         return ResponseEntity.status(HttpStatus.CREATED).body(quotationService.saveItem(id, request));
     }
 
+    @Operation(summary = "Alta masiva de ítems",
+               description = "Agrega varias líneas desde filas pegadas de una hoja de cálculo. El cliente envía solo código y cantidad; " +
+                             "la búsqueda en catálogo ocurre en el servidor. Retorna los códigos agregados y los no encontrados.")
+    @PostMapping("/{id}/items/bulk")
+    public ResponseEntity<java.util.Map<String, Object>> addItemsBulk(
+            @Parameter(description = "ID de la cotización") @PathVariable Long id,
+            @RequestBody java.util.Map<String, Object> body) {
+        Integer clubId = Integer.valueOf(body.get("clubId").toString());
+        @SuppressWarnings("unchecked")
+        List<java.util.Map<String, Object>> lines =
+                (List<java.util.Map<String, Object>>) body.getOrDefault("lines", List.of());
+        log.info("[QuotationController] POST /api/v1/quotations/{}/items/bulk lines={}", id, lines.size());
+        return ResponseEntity.ok(quotationService.addItemsBulk(id, clubId, lines));
+    }
+
     @Operation(summary = "Listar ítems", description = "Retorna todos los ítems de la cotización ordenados por productId")
     @GetMapping("/{id}/items")
     public ResponseEntity<List<QuotationItemResponse>> getItems(
