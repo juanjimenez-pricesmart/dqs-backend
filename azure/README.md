@@ -171,6 +171,33 @@ payment methods and document types. Those endpoints exist for exactly this: the
 catalogs have no consumer yet, so without them nothing would notice a broken
 connection until the day something is switched over.
 
+### The instance
+
+Created 2026-09-07, subscription `psmt-b2b-online-dev`, resource group
+`rg-b2b-shared-dev`:
+
+    server    sql-b2b-quotecenter-eastus-dev.database.windows.net   (eastus)
+    database  quotecenter   Basic, 2 GB
+    login     qcadmin       password in api/.env.local, which is gitignored
+
+Its own server rather than a database on `sql-b2b-online-eastus-dev`, which is
+shared with other teams: connecting there would have meant either their
+`sqladmin` password or making ourselves Entra admin over everyone's databases.
+A logical server costs nothing on its own — the charge is per database.
+
+Firewall rules: `claude-code-runner` and `AllowAzureServices`. Add your own IP
+before connecting; there is no blanket rule.
+
+**Do not `source` `.env.local` before starting the application.** Spring reads
+it directly. A shell cuts `AZURE_DB_URL` at its first `;`, leaving host and port
+only, so the driver connects to `master` and every table looks missing at
+startup — which is exactly how the first run failed.
+
+Exchange-rate history is **not loaded**. `sqlcmd` sends `04` as a single 2 MB
+batch and a Basic-tier database chews on it for a long time; nothing reads the
+table and it is not wired into `CatalogSource`, so it was skipped. The file is
+idempotent whenever it is wanted.
+
 ### Trying it locally, without an Azure instance
 
 SQL Server in Docker is close enough to Azure SQL for this schema:
