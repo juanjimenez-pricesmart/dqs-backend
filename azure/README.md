@@ -91,12 +91,38 @@ Each is listed in a comment at the top of `03_import.sql` as well.
 
 ## Decisions the import does not make for you
 
-**`countries.price_includes_tax` is left at 0 for every country.** It comes from
-`ps_tienda.impuesto_operacion`, which holds `'+'`, `'-'` or empty rather than a
-boolean, and nothing in either codebase documents what those mean. It feeds the
-OMS tax payload, so it is a deliberate decision, not something to infer from a
-sign. Each country's raw legacy value is in a comment above its row in
-`02_seed.sql`.
+**`countries.price_includes_tax` reproduces current behaviour, which may not be
+current intent.** It comes from `ps_tienda.impuesto_operacion`, which holds
+`'+'`, `'-'` or empty rather than a boolean. Nothing documents what those mean;
+the meaning is in `OrdersService::calculateCorrectTotals`:
+
+    if ($operacion == '+')  $total = $subtotal + $tax;   // tax added on top
+    else                    $total = $subtotal - $tax;   // tax already in
+
+So `'+'` means the stored line amounts **exclude** tax, and anything else means
+they **include** it. Empty falls into the `else`, so it behaves as `'-'`:
+
+| `impuesto_operacion` | Countries | `price_includes_tax` |
+|---|---|---|
+| `'+'` | AW, BB, JM, NI, VI | 0 |
+| `'-'` | CO, CR, DO, GT, TT | 1 |
+| empty | HN, PA, SV | 1 |
+
+**The empty three are worth a look before go-live.** Nothing distinguishes "this
+country includes tax" from "nobody ever filled this field in" — both land on 1.
+Panama makes the doubt concrete: the `'+'` branch carries a special adjustment
+for Peru, Panama and the Dominican Republic that swaps subtotal and total, and
+because Panama's value is empty that adjustment **can never run for Panama**.
+The Dominican Republic is fine — it is `'-'` and the `else` branch has its own
+swap — and there are no Peru clubs at all. So either Panama's data is wrong or
+that code has been dead for a long time. The import copies the behaviour as it
+stands; correcting it is a business decision, not a migration one.
+
+The column was also **overloaded**: `gettoken_helper.php` reads the same field to
+pick a tax *label*, mapping `'-'` to "VAT" and everything else to "IVA" — which
+labels Colombia as VAT. The new schema keeps `tax_name` as its own column,
+seeded from the real tax name per country, so the two concerns stop sharing a
+field.
 
 **Payment method codes are derived**, upper-cased and trimmed from
 `orders_pago.descripcion`, so two spellings of the same method collapse into one
