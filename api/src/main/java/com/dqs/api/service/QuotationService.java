@@ -188,8 +188,22 @@ public class QuotationService {
 
     // ── Update item qty ───────────────────────────────────────────────────
 
+    /**
+     * Narrow path kept for the existing PATCH .../items/{itemId}/qty endpoint,
+     * which the lines table calls on every inline quantity edit.
+     */
     @Transactional
     public QuotationItemResponse updateItemQty(Long quotationId, Long itemId, java.util.Map<String, Object> body) {
+        return updateItem(quotationId, itemId, body);
+    }
+
+    /**
+     * Updates a line's quantity and/or its exemption percentage. Both keys are
+     * optional, so the Editar Item modal can send them together in one call
+     * the way legacy's orders/saveitemqty does.
+     */
+    @Transactional
+    public QuotationItemResponse updateItem(Long quotationId, Long itemId, java.util.Map<String, Object> body) {
         findOrThrow(quotationId);
         QuotationItem item = quotationItemRepository.findById(itemId)
                 .orElseThrow(() -> new QuotationNotFoundException(itemId));
@@ -197,7 +211,24 @@ public class QuotationService {
             throw new IllegalArgumentException("Item " + itemId + " does not belong to quotation " + quotationId);
         }
 
-        BigDecimal newQty = new BigDecimal(body.get("qty").toString());
+        if (body.get("qty") != null) {
+            applyQty(item, new BigDecimal(body.get("qty").toString()));
+        }
+
+        // The exemption is recomputed on EVERY call, not just when a percentage
+        // is sent, because it is derived from tax_amount and a quantity change
+        // moves tax_amount. Legacy does the same — OrdersItemModel::updateItem
+        // sets excent_amount unconditionally, outside the `if (!empty($exemp))`
+        // guard. Skipping it left the exempt amount stale after a qty edit.
+        BigDecimal pct = body.get("exemp") != null
+                ? new BigDecimal(body.get("exemp").toString())
+                : (item.getTaxes() != null ? coalesce(item.getTaxes().getExcentPorcentaje(), BigDecimal.ZERO) : BigDecimal.ZERO);
+        applyExemption(item, pct);
+
+        return toItemResponse(quotationItemRepository.save(item));
+    }
+
+    private void applyQty(QuotationItem item, BigDecimal newQty) {
         BigDecimal signPrice = coalesce(item.getSignPrice(), BigDecimal.ZERO);
         BigDecimal taxFactor = item.getTaxes() != null ? coalesce(item.getTaxes().getTaxFactor(), BigDecimal.ZERO) : BigDecimal.ZERO;
 
@@ -207,18 +238,59 @@ public class QuotationService {
             item.getTaxes().setTaxAmount(newQty.multiply(taxFactor).setScale(4, java.math.RoundingMode.HALF_UP));
         }
 
-        QuotationItem pl = item.getProduct() != null ? item : item;
-        BigDecimal plVal = item.getProduct() != null ? coalesce(item.getProduct().getPl(), BigDecimal.ONE) : BigDecimal.ONE;
-        BigDecimal weightEa = item.getProduct() != null ? coalesce(item.getProduct().getWeightEa(), BigDecimal.ZERO) : BigDecimal.ZERO;
         if (item.getProduct() != null) {
+            BigDecimal plVal = coalesce(item.getProduct().getPl(), BigDecimal.ONE);
+            BigDecimal weightEa = coalesce(item.getProduct().getWeightEa(), BigDecimal.ZERO);
             item.getProduct().setWeightResult(newQty.multiply(weightEa).setScale(4, java.math.RoundingMode.HALF_UP));
             item.getProduct().setPalletxqty(plVal.compareTo(BigDecimal.ZERO) != 0
                     ? newQty.divide(plVal, 4, java.math.RoundingMode.HALF_UP)
                     : BigDecimal.ZERO);
         }
 
-        log.info("[QuotationService] updateItemQty id={} qty={}", itemId, newQty);
-        return toItemResponse(quotationItemRepository.save(item));
+        log.info("[QuotationService] updateItem id={} qty={}", item.getId(), newQty);
+    }
+
+    /**
+     * Exemption percentage, with legacy's formula:
+     *
+     *   excent_amount = ROUND((excent_porcentaje / tax_porcentaje) * tax_amount, 2)
+     *
+     * (OrdersItemModel::updateItem). Two guards legacy gets for free from
+     * MySQL and Java does not:
+     *
+     *  - tax_porcentaje = 0 makes MySQL return NULL for that division; in Java
+     *    it would throw, so a zero rate means zero exemption.
+     *  - the percentage is capped at the line's own tax percentage. Legacy only
+     *    enforces that in the browser (data-max-tax on #item_exemp), which any
+     *    caller can bypass, so it is enforced here too.
+     */
+    private void applyExemption(QuotationItem item, BigDecimal requested) {
+        if (item.getTaxes() == null) return;
+
+        BigDecimal taxPct = coalesce(item.getTaxes().getTaxPorcentaje(), BigDecimal.ZERO);
+        BigDecimal taxAmount = coalesce(item.getTaxes().getTaxAmount(), BigDecimal.ZERO);
+
+        // No tax on the line means there is nothing to exempt, so the percentage
+        // is forced to zero rather than stored. Keeping a percentage against a
+        // zero rate leaves a figure that reads as meaningful and is not: it
+        // can never produce an exempt amount.
+        BigDecimal pct = requested.max(BigDecimal.ZERO);
+        if (taxPct.compareTo(BigDecimal.ZERO) <= 0) {
+            pct = BigDecimal.ZERO;
+        } else if (pct.compareTo(taxPct) > 0) {
+            pct = taxPct;
+        }
+
+        BigDecimal excentAmount = taxPct.compareTo(BigDecimal.ZERO) == 0
+                ? BigDecimal.ZERO
+                : pct.divide(taxPct, 10, java.math.RoundingMode.HALF_UP)
+                     .multiply(taxAmount)
+                     .setScale(2, java.math.RoundingMode.HALF_UP);
+
+        item.getTaxes().setExcentPorcentaje(pct);
+        item.getTaxes().setExcentAmount(excentAmount);
+
+        log.info("[QuotationService] updateItem id={} exemption={}% amount={}", item.getId(), pct, excentAmount);
     }
 
     // ── Delete item ───────────────────────────────────────────────────────

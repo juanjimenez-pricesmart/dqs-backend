@@ -117,6 +117,18 @@ public class QuotationController {
         return ResponseEntity.ok(quotationService.getItems(id));
     }
 
+    @Operation(summary = "Actualizar una línea",
+               description = "Actualiza cantidad y/o porcentaje de exención en una sola llamada. Ambos campos son opcionales. " +
+                             "La exención se limita al impuesto de la línea y recalcula el monto exento.")
+    @PatchMapping("/{id}/items/{itemId}")
+    public ResponseEntity<QuotationItemResponse> updateItem(
+            @Parameter(description = "ID de la cotización") @PathVariable Long id,
+            @Parameter(description = "ID del ítem") @PathVariable Long itemId,
+            @RequestBody java.util.Map<String, Object> body) {
+        log.info("[QuotationController] PATCH /api/v1/quotations/{}/items/{}", id, itemId);
+        return ResponseEntity.ok(quotationService.updateItem(id, itemId, body));
+    }
+
     @Operation(summary = "Actualizar cantidad de ítem", description = "Actualiza solo la cantidad y recalcula el monto")
     @PatchMapping("/{id}/items/{itemId}/qty")
     public ResponseEntity<QuotationItemResponse> updateItemQty(
