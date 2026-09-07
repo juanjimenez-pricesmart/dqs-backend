@@ -6,6 +6,19 @@
 -- new. See README.md for the translation table and the ownership rationale.
 --
 -- Idempotent: safe to re-run. Each object is created only if absent.
+--
+-- Every text column is NVARCHAR, including the fixed-length ISO codes. CHAR
+-- would be the tighter type for iso2/iso3/currency_code, but Hibernate maps a
+-- String to a variable-length column and schema validation rejects CHAR at
+-- startup. Uniformity is worth more here than three saved bytes, and CHAR's
+-- space padding is a comparison bug waiting to happen anyway.
+--
+-- Timestamps are DATETIMEOFFSET, not DATETIME2. They are written with
+-- SYSUTCDATETIME(), so the stored offset is +00:00 and the type says so. The
+-- entities map them to java.time.Instant, and Hibernate's SQL Server dialect
+-- requires DATETIMEOFFSET for that — a DATETIME2 column fails schema validation
+-- at startup. Mapping to LocalDateTime instead would have silenced it while
+-- leaving a Java type that claims to have no timezone holding a UTC value.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 SET ANSI_NULLS ON;
@@ -20,13 +33,13 @@ GO
 IF OBJECT_ID(N'dbo.countries', N'U') IS NULL
 CREATE TABLE dbo.countries (
     id                            INT            IDENTITY(1,1) NOT NULL,
-    iso2                          CHAR(2)        NOT NULL,
-    iso3                          CHAR(3)        NOT NULL,
+    iso2                          NVARCHAR(2)        NOT NULL,
+    iso3                          NVARCHAR(3)        NOT NULL,
     name                          NVARCHAR(100)  NOT NULL,
-    currency_code                 CHAR(3)        NOT NULL,   -- ISO 4217 local currency; USD implicit system-wide
+    currency_code                 NVARCHAR(3)        NOT NULL,   -- ISO 4217 local currency; USD implicit system-wide
     currency_symbol               NVARCHAR(10)   NULL,
     currency_name                 NVARCHAR(50)   NULL,
-    default_language              CHAR(2)        NOT NULL CONSTRAINT DF_countries_lang DEFAULT ('es'),
+    default_language              NVARCHAR(2)        NOT NULL CONSTRAINT DF_countries_lang DEFAULT ('es'),
     tax_name                      NVARCHAR(20)   NULL,       -- IVA, VAT, ITBMS…
     tax_id_label                  NVARCHAR(10)   NULL,       -- NIT, RUC, RTN (ex ps_tienda.tributo_siglas)
     price_includes_tax            BIT            NOT NULL CONSTRAINT DF_countries_pit DEFAULT (0),
@@ -37,8 +50,8 @@ CREATE TABLE dbo.countries (
     transfer_notice_amount_usd    DECIMAL(15,4)  NOT NULL CONSTRAINT DF_countries_tnusd DEFAULT (250.0000),
     transfer_notice_amount_local  DECIMAL(15,4)  NULL,
     is_active                     BIT            NOT NULL CONSTRAINT DF_countries_active DEFAULT (1),
-    created_at                    DATETIME2(3)   NOT NULL CONSTRAINT DF_countries_created DEFAULT (SYSUTCDATETIME()),
-    updated_at                    DATETIME2(3)   NOT NULL CONSTRAINT DF_countries_updated DEFAULT (SYSUTCDATETIME()),
+    created_at                    DATETIMEOFFSET(3)   NOT NULL CONSTRAINT DF_countries_created DEFAULT (SYSUTCDATETIME()),
+    updated_at                    DATETIMEOFFSET(3)   NOT NULL CONSTRAINT DF_countries_updated DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT PK_countries      PRIMARY KEY (id),
     CONSTRAINT UQ_countries_iso2 UNIQUE (iso2),
     CONSTRAINT UQ_countries_iso3 UNIQUE (iso3)
@@ -64,8 +77,8 @@ CREATE TABLE dbo.clubs (
     tax_registration_number NVARCHAR(30)   NULL,       -- printed on quotes (ex ps_tienda.nit)
     timezone                NVARCHAR(64)   NOT NULL CONSTRAINT DF_clubs_tz DEFAULT ('America/Guatemala'),
     is_active               BIT            NOT NULL CONSTRAINT DF_clubs_active DEFAULT (1),
-    created_at              DATETIME2(3)   NOT NULL CONSTRAINT DF_clubs_created DEFAULT (SYSUTCDATETIME()),
-    updated_at              DATETIME2(3)   NOT NULL CONSTRAINT DF_clubs_updated DEFAULT (SYSUTCDATETIME()),
+    created_at              DATETIMEOFFSET(3)   NOT NULL CONSTRAINT DF_clubs_created DEFAULT (SYSUTCDATETIME()),
+    updated_at              DATETIMEOFFSET(3)   NOT NULL CONSTRAINT DF_clubs_updated DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT PK_clubs             PRIMARY KEY (id),
     CONSTRAINT UQ_clubs_club_number UNIQUE (club_number),
     CONSTRAINT FK_clubs_country     FOREIGN KEY (country_id) REFERENCES dbo.countries (id)
@@ -84,8 +97,8 @@ CREATE TABLE dbo.route_types (
     name        NVARCHAR(100)  NOT NULL,
     description NVARCHAR(200)  NULL,
     is_active   BIT            NOT NULL CONSTRAINT DF_route_types_active DEFAULT (1),
-    created_at  DATETIME2(3)   NOT NULL CONSTRAINT DF_route_types_created DEFAULT (SYSUTCDATETIME()),
-    updated_at  DATETIME2(3)   NOT NULL CONSTRAINT DF_route_types_updated DEFAULT (SYSUTCDATETIME()),
+    created_at  DATETIMEOFFSET(3)   NOT NULL CONSTRAINT DF_route_types_created DEFAULT (SYSUTCDATETIME()),
+    updated_at  DATETIMEOFFSET(3)   NOT NULL CONSTRAINT DF_route_types_updated DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT PK_route_types      PRIMARY KEY (id),
     CONSTRAINT UQ_route_types_code UNIQUE (code)
 );
@@ -106,8 +119,8 @@ CREATE TABLE dbo.routes (
     requires_full_pallet BIT            NOT NULL CONSTRAINT DF_routes_rfp DEFAULT (0),
     requires_half_pallet BIT            NOT NULL CONSTRAINT DF_routes_rhp DEFAULT (0),
     is_active            BIT            NOT NULL CONSTRAINT DF_routes_active DEFAULT (1),
-    created_at           DATETIME2(3)   NOT NULL CONSTRAINT DF_routes_created DEFAULT (SYSUTCDATETIME()),
-    updated_at           DATETIME2(3)   NOT NULL CONSTRAINT DF_routes_updated DEFAULT (SYSUTCDATETIME()),
+    created_at           DATETIMEOFFSET(3)   NOT NULL CONSTRAINT DF_routes_created DEFAULT (SYSUTCDATETIME()),
+    updated_at           DATETIMEOFFSET(3)   NOT NULL CONSTRAINT DF_routes_updated DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT PK_routes            PRIMARY KEY (id),
     CONSTRAINT UQ_routes_club_code  UNIQUE (club_id, code),
     CONSTRAINT FK_routes_club       FOREIGN KEY (club_id)       REFERENCES dbo.clubs (id),
@@ -130,8 +143,8 @@ CREATE TABLE dbo.route_prices (
     unit_type   NVARCHAR(20)   NOT NULL,
     price_local DECIMAL(15,4)  NOT NULL CONSTRAINT DF_route_prices_local DEFAULT (0),
     price_usd   DECIMAL(15,4)  NOT NULL CONSTRAINT DF_route_prices_usd DEFAULT (0),
-    created_at  DATETIME2(3)   NOT NULL CONSTRAINT DF_route_prices_created DEFAULT (SYSUTCDATETIME()),
-    updated_at  DATETIME2(3)   NOT NULL CONSTRAINT DF_route_prices_updated DEFAULT (SYSUTCDATETIME()),
+    created_at  DATETIMEOFFSET(3)   NOT NULL CONSTRAINT DF_route_prices_created DEFAULT (SYSUTCDATETIME()),
+    updated_at  DATETIMEOFFSET(3)   NOT NULL CONSTRAINT DF_route_prices_updated DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT PK_route_prices           PRIMARY KEY (id),
     CONSTRAINT UQ_route_prices_route_unit UNIQUE (route_id, unit_type),
     CONSTRAINT CK_route_prices_unit_type CHECK (unit_type IN (N'TRIP', N'FULL_PALLET', N'HALF_PALLET', N'QUARTER_PALLET')),
@@ -156,8 +169,8 @@ CREATE TABLE dbo.fiscal_document_types (
     input_mask       NVARCHAR(150)  NULL,       -- ex ps_fel.formato
     validation_regex NVARCHAR(150)  NULL,       -- ex ps_fel.formato2
     is_active        BIT            NOT NULL CONSTRAINT DF_fdt_active DEFAULT (1),
-    created_at       DATETIME2(3)   NOT NULL CONSTRAINT DF_fdt_created DEFAULT (SYSUTCDATETIME()),
-    updated_at       DATETIME2(3)   NOT NULL CONSTRAINT DF_fdt_updated DEFAULT (SYSUTCDATETIME()),
+    created_at       DATETIMEOFFSET(3)   NOT NULL CONSTRAINT DF_fdt_created DEFAULT (SYSUTCDATETIME()),
+    updated_at       DATETIMEOFFSET(3)   NOT NULL CONSTRAINT DF_fdt_updated DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT PK_fiscal_document_types  PRIMARY KEY (id),
     CONSTRAINT UQ_fdt_country_code       UNIQUE (country_id, code),
     CONSTRAINT CK_fdt_length_order       CHECK (min_length IS NULL OR max_length IS NULL OR min_length <= max_length),
@@ -179,8 +192,8 @@ CREATE TABLE dbo.payment_method_types (
     code       NVARCHAR(50)   NOT NULL,   -- VISA, EFECTIVO, PAYMENT_LINK…
     name       NVARCHAR(100)  NOT NULL,
     is_active  BIT            NOT NULL CONSTRAINT DF_pmt_active DEFAULT (1),
-    created_at DATETIME2(3)   NOT NULL CONSTRAINT DF_pmt_created DEFAULT (SYSUTCDATETIME()),
-    updated_at DATETIME2(3)   NOT NULL CONSTRAINT DF_pmt_updated DEFAULT (SYSUTCDATETIME()),
+    created_at DATETIMEOFFSET(3)   NOT NULL CONSTRAINT DF_pmt_created DEFAULT (SYSUTCDATETIME()),
+    updated_at DATETIMEOFFSET(3)   NOT NULL CONSTRAINT DF_pmt_updated DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT PK_payment_method_types      PRIMARY KEY (id),
     CONSTRAINT UQ_payment_method_types_code UNIQUE (code)
 );
@@ -196,8 +209,8 @@ CREATE TABLE dbo.country_payment_methods (
     tender_key     INT           NOT NULL,   -- POS/OMS tender key
     is_active      BIT           NOT NULL CONSTRAINT DF_cpm_active DEFAULT (1),
     sort_order     INT           NOT NULL CONSTRAINT DF_cpm_sort DEFAULT (0),
-    created_at     DATETIME2(3)  NOT NULL CONSTRAINT DF_cpm_created DEFAULT (SYSUTCDATETIME()),
-    updated_at     DATETIME2(3)  NOT NULL CONSTRAINT DF_cpm_updated DEFAULT (SYSUTCDATETIME()),
+    created_at     DATETIMEOFFSET(3)  NOT NULL CONSTRAINT DF_cpm_created DEFAULT (SYSUTCDATETIME()),
+    updated_at     DATETIMEOFFSET(3)  NOT NULL CONSTRAINT DF_cpm_updated DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT PK_country_payment_methods PRIMARY KEY (id),
     CONSTRAINT UQ_cpm_country_method      UNIQUE (country_id, method_type_id),
     CONSTRAINT FK_cpm_country             FOREIGN KEY (country_id)     REFERENCES dbo.countries (id),
@@ -225,7 +238,7 @@ CREATE TABLE dbo.exchange_rates (
     effective_date     DATE           NOT NULL,
     source             NVARCHAR(100)  NULL,
     created_by_user_id BIGINT         NULL,       -- MySQL users.id; no FK possible
-    created_at         DATETIME2(3)   NOT NULL CONSTRAINT DF_fx_created DEFAULT (SYSUTCDATETIME()),
+    created_at         DATETIMEOFFSET(3)   NOT NULL CONSTRAINT DF_fx_created DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT PK_exchange_rates            PRIMARY KEY (id),
     CONSTRAINT UQ_exchange_rates_country_date UNIQUE (country_id, effective_date),
     CONSTRAINT CK_exchange_rates_positive   CHECK (rate > 0),
