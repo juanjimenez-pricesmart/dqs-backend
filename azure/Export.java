@@ -85,6 +85,7 @@ public class Export {
             -- afterwards; see README.md.
             -- ─────────────────────────────────────────────────────────────────────────────
             """);
+        skipReport(w);
 
         // clubs
         w.println("-- ── clubs (ex ps_tienda) ─────────────────────────────────────────────────");
@@ -116,9 +117,15 @@ public class Export {
         // routes
         w.println("-- ── routes (ex ps_rutas) ─────────────────────────────────────────────────");
         rs = c.createStatement().executeQuery(
+            // Inner join to ps_tienda: a route whose club does not exist is not
+            // emitted at all. Emitting a MERGE we already know will match nothing
+            // would be noise, and would make the expected counts below a lie.
             "SELECT r.ps_tienda_id, r.llave, r.descripcion, r.truck_size, r.status, tr.codigo, " +
             "       r.pallet_required, r.halfpallet_required " +
-            "FROM ps_rutas r LEFT JOIN ps_tipos_ruta tr ON tr.id = r.tipo_ruta_id ORDER BY r.ps_tienda_id, r.llave");
+            "FROM ps_rutas r " +
+            "JOIN ps_tienda t ON t.ps_tienda_id = r.ps_tienda_id " +
+            "LEFT JOIN ps_tipos_ruta tr ON tr.id = r.tipo_ruta_id " +
+            "ORDER BY r.ps_tienda_id, r.llave");
         int nr = 0;
         while (rs.next()) {
             String rt = rs.getString(6);
@@ -142,8 +149,9 @@ public class Export {
             -- `14pallet_local`, `14pallet_usd`. One row per tier here, so adding a tier
             -- stops being an ALTER. A tier the legacy row left NULL produces no row.""");
         rs = c.createStatement().executeQuery(
-            "SELECT ps_tienda_id, llave, pallet_local, halfpallet_local, `14pallet_local`, `14pallet_usd` FROM ps_rutas " +
-            "ORDER BY ps_tienda_id, llave");
+            "SELECT r.ps_tienda_id, r.llave, r.pallet_local, r.halfpallet_local, r.`14pallet_local`, r.`14pallet_usd` " +
+            "FROM ps_rutas r JOIN ps_tienda t ON t.ps_tienda_id = r.ps_tienda_id " +
+            "ORDER BY r.ps_tienda_id, r.llave");
         int np = 0;
         while (rs.next()) {
             int club = rs.getInt(1); String key = rs.getString(2);
@@ -167,7 +175,12 @@ public class Export {
         // fiscal document types
         w.println("-- ── fiscal_document_types (ex ps_fel) ────────────────────────────────────");
         rs = c.createStatement().executeQuery(
-            "SELECT pais_iso2, nombre_en, nombre_es, formato FROM ps_fel WHERE pais_iso2 IS NOT NULL AND nombre_en IS NOT NULL ORDER BY pais_iso2, felid");
+            // Deduplicated at source: (country, nombre_en) is the unique key on the
+            // target, and ps_fel has repeats — JM 'Passport' twice, for one. Lowest
+            // felid wins, which is the row the legacy dropdown showed first.
+            "SELECT pais_iso2, nombre_en, MIN(nombre_es) nombre_es, MIN(formato) formato " +
+            "FROM ps_fel WHERE pais_iso2 IS NOT NULL AND nombre_en IS NOT NULL " +
+            "GROUP BY pais_iso2, nombre_en ORDER BY pais_iso2, MIN(felid)");
         int nf = 0;
         while (rs.next()) {
             w.printf("MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = %s) AS cid, %s AS code) AS s%n",
@@ -210,9 +223,85 @@ public class Export {
         }
         w.println("GO\n");
 
+        verify(w, new String[][] {
+            {"clubs",                   String.valueOf(nc)},
+            {"route_types",             String.valueOf(nrt)},
+            {"routes",                  String.valueOf(nr)},
+            {"route_prices",            String.valueOf(np)},
+            {"fiscal_document_types",   String.valueOf(nf)},
+            {"payment_method_types",    String.valueOf(nmt)},
+            {"country_payment_methods", String.valueOf(ncpm)},
+        });
         w.close();
         System.out.printf("03_import.sql: %d clubes, %d tipos de ruta, %d rutas, %d tarifas, %d tipos de documento, %d métodos de pago (%d por país)%n",
             nc, nrt, nr, np, nf, nmt, ncpm);
+    }
+
+    /**
+     * Rows the import will NOT create, worked out against the live database at
+     * generation time and written into the script as a comment.
+     *
+     * Every MERGE here is guarded (`AND s.club IS NOT NULL` and friends) so a
+     * row whose parent is missing is skipped instead of failing the run. That is
+     * the right behaviour — one orphan should not stop the import — but skipping
+     * in silence is not: the script would report success having quietly dropped
+     * rows. So it says up front exactly what it will drop and why.
+     */
+    static void skipReport(PrintWriter w) throws Exception {
+        w.println("-- ── Rows from the legacy database this import deliberately omits ─────────");
+        w.println("-- Filtered out when the script was generated, so the counts at the bottom");
+        w.println("-- are what a correct run actually produces.");
+        ResultSet rs = c.createStatement().executeQuery(
+            "SELECT r.ps_tienda_id, COUNT(*) FROM ps_rutas r " +
+            "LEFT JOIN ps_tienda t ON t.ps_tienda_id = r.ps_tienda_id " +
+            "WHERE t.ps_tienda_id IS NULL GROUP BY r.ps_tienda_id ORDER BY r.ps_tienda_id");
+        boolean any = false;
+        while (rs.next()) {
+            w.printf("--   %d route(s) of club %d — that club is not in ps_tienda (legacy orphan),%n",
+                rs.getInt(2), rs.getInt(1));
+            w.println("--     so its tariffs are skipped with it.");
+            any = true;
+        }
+        rs = c.createStatement().executeQuery(
+            "SELECT pais_iso2, nombre_en, COUNT(*) FROM ps_fel " +
+            "GROUP BY pais_iso2, nombre_en HAVING COUNT(*) > 1");
+        while (rs.next()) {
+            w.printf("--   ps_fel has %d rows for %s '%s' — collapsed to one by%n",
+                rs.getInt(3), rs.getString(1), rs.getString(2));
+            w.println("--     UQ_fdt_country_code. Deduplication, not data loss.");
+            any = true;
+        }
+        rs = c.createStatement().executeQuery(
+            "SELECT COUNT(*) FROM ps_tasa_cambio WHERE ps_tasa_cambio_tipocambio <= 0");
+        if (rs.next() && rs.getInt(1) > 0) {
+            w.printf("--   %d exchange rate row(s) with a non-positive rate — rejected by%n", rs.getInt(1));
+            w.println("--     CK_exchange_rates_positive, so they are filtered out at source.");
+            any = true;
+        }
+        if (!any) w.println("--   (none)");
+        w.println();
+    }
+
+    /**
+     * A final count check, so a partial or silently-skipping run is visible
+     * rather than looking like success.
+     */
+    static void verify(PrintWriter w, String[][] expected) {
+        w.println("-- ── Verification ─────────────────────────────────────────────────────────");
+        w.println("-- Counts are what this script was generated to produce. A table showing");
+        w.println("-- FEWER rows means statements did not apply; MORE is fine — rows may have");
+        w.println("-- been added since, and nothing here deletes.");
+        w.println("SET NOCOUNT ON;");
+        w.println("DECLARE @short INT = 0, @actual INT;");
+        for (String[] e : expected) {
+            w.printf("SELECT @actual = COUNT(*) FROM dbo.%s;%n", e[0]);
+            w.printf("IF @actual < %s BEGIN SET @short = @short + 1;%n", e[1]);
+            w.printf("    RAISERROR('%-24s expected >= %-6s actual %%d', 10, 1, @actual) WITH NOWAIT; END%n", e[0], e[1]);
+            w.printf("ELSE RAISERROR('%-24s ok (%%d)', 0, 1, @actual) WITH NOWAIT;%n", e[0], e[1]);
+        }
+        w.println("IF @short > 0 RAISERROR('Import incomplete: %d table(s) short. See the lines above.', 16, 1, @short);");
+        w.println("ELSE PRINT 'Import complete.';");
+        w.println("GO");
     }
 
     /**

@@ -30,7 +30,7 @@ Until that is true for a given catalog, its rows will drift.
 |---|---|---|
 | `01_schema.sql` | tables, constraints, indexes, `updated_at` triggers | hand-written |
 | `02_seed.sql` | country rows — reference data we define, not copied | generated |
-| `03_import.sql` | one-time copy: 61 clubs, 3 route types, 443 routes, 1329 tariffs, 33 document types, 99 payment methods across 314 country rows | generated |
+| `03_import.sql` | one-time copy: 61 clubs, 3 route types, 434 routes, 1302 tariffs, 32 document types, 99 payment methods across 314 country rows | generated |
 | `04_import_fx_history.sql` | 6076 exchange rates. **Optional** | generated |
 
 Run them in that order. `01` is idempotent and the generated ones match on the
@@ -53,6 +53,41 @@ review the generator, not a 900 KB dump someone pasted.
         ../azure/02_seed.sql ../azure/03_import.sql ../azure/04_import_fx_history.sql
 
 It reads credentials from the environment and never writes them into the output.
+
+## Verified
+
+Run end to end against SQL Server 2022 in Docker, on an empty database, in this
+order, with no errors:
+
+    countries=13  clubs=61  route_types=3  routes=434  route_prices=1302
+    fiscal_document_types=32  payment_method_types=99
+    country_payment_methods=314  exchange_rates=6076
+    9 tables · 8 triggers · 8 foreign keys · 3 check constraints
+
+Also checked: re-running `01`–`03` changes no counts and raises no errors; the
+`updated_at` trigger advances on UPDATE; the `unit_type` check and the
+`club_number` unique constraint both reject bad rows; and spot-checked route
+tariffs match the legacy values (`6101 01` → 95000 / 42000).
+
+`03_import.sql` ends with a count check that prints `Import complete.` or names
+each table that came up short and fails the batch, so a partial run cannot look
+like a successful one.
+
+SQL Server 2022 is a close proxy for Azure SQL for DDL of this kind, but it is a
+proxy. Run it once on a scratch Azure database before the real one.
+
+## Rows the import omits, on purpose
+
+Filtered out **when the script is generated**, so the expected counts are what a
+correct run actually produces:
+
+- **9 routes** belonging to clubs `6308` and `8703`, which do not exist in
+  `ps_tienda` — legacy orphans. Their 27 tariffs go with them.
+- **1 fiscal document type**: `ps_fel` holds `Passport` twice for Jamaica.
+  `UQ_fdt_country_code` collapses them; lowest `felid` wins, which is the row
+  the legacy dropdown showed first. Deduplication, not loss.
+
+Each is listed in a comment at the top of `03_import.sql` as well.
 
 ## Decisions the import does not make for you
 

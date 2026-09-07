@@ -11,6 +11,16 @@
 -- afterwards; see README.md.
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- ── Rows from the legacy database this import deliberately omits ─────────
+-- Filtered out when the script was generated, so the counts at the bottom
+-- are what a correct run actually produces.
+--   8 route(s) of club 6308 — that club is not in ps_tienda (legacy orphan),
+--     so its tariffs are skipped with it.
+--   1 route(s) of club 8703 — that club is not in ps_tienda (legacy orphan),
+--     so its tariffs are skipped with it.
+--   ps_fel has 2 rows for JM 'Passport' — collapsed to one by
+--     UQ_fdt_country_code. Deduplication, not data loss.
+
 -- ── clubs (ex ps_tienda) ─────────────────────────────────────────────────
 MERGE dbo.clubs AS t USING (SELECT 6101 AS cn) AS s ON t.club_number = s.cn
 WHEN NOT MATCHED THEN INSERT (club_number, country_id, name, latitude, longitude, timezone, is_active)
@@ -807,38 +817,6 @@ MERGE dbo.routes AS t USING (SELECT (SELECT id FROM dbo.clubs WHERE club_number 
   ON t.club_id = s.club AND t.code = s.code
 WHEN NOT MATCHED AND s.club IS NOT NULL THEN INSERT (club_id, code, route_type_id, name, truck_size, requires_full_pallet, requires_half_pallet, is_active)
      VALUES (s.club, s.code, (SELECT id FROM dbo.route_types WHERE code = N'B2B_DELIVERY'), N'Siquinala Santa Lucia Cocales Tiquisate  La Nueva Concepcion', 5.0, 1, 1, 1);
-MERGE dbo.routes AS t USING (SELECT (SELECT id FROM dbo.clubs WHERE club_number = 6308) AS club, N'6308 01' AS code) AS s
-  ON t.club_id = s.club AND t.code = s.code
-WHEN NOT MATCHED AND s.club IS NOT NULL THEN INSERT (club_id, code, route_type_id, name, truck_size, requires_full_pallet, requires_half_pallet, is_active)
-     VALUES (s.club, s.code, (SELECT id FROM dbo.route_types WHERE code = N'B2B_DELIVERY'), N'Ruta Quetzaltenango Dry', 5.0, 1, 1, 1);
-MERGE dbo.routes AS t USING (SELECT (SELECT id FROM dbo.clubs WHERE club_number = 6308) AS club, N'6308 02' AS code) AS s
-  ON t.club_id = s.club AND t.code = s.code
-WHEN NOT MATCHED AND s.club IS NOT NULL THEN INSERT (club_id, code, route_type_id, name, truck_size, requires_full_pallet, requires_half_pallet, is_active)
-     VALUES (s.club, s.code, (SELECT id FROM dbo.route_types WHERE code = N'B2B_DELIVERY'), N'Ruta Huehuetenango Dry', 5.0, 1, 1, 1);
-MERGE dbo.routes AS t USING (SELECT (SELECT id FROM dbo.clubs WHERE club_number = 6308) AS club, N'6308 03' AS code) AS s
-  ON t.club_id = s.club AND t.code = s.code
-WHEN NOT MATCHED AND s.club IS NOT NULL THEN INSERT (club_id, code, route_type_id, name, truck_size, requires_full_pallet, requires_half_pallet, is_active)
-     VALUES (s.club, s.code, (SELECT id FROM dbo.route_types WHERE code = N'B2B_DELIVERY'), N'Ruta Santa Cruz del Quiche Dry', 5.0, 1, 1, 1);
-MERGE dbo.routes AS t USING (SELECT (SELECT id FROM dbo.clubs WHERE club_number = 6308) AS club, N'6308 04' AS code) AS s
-  ON t.club_id = s.club AND t.code = s.code
-WHEN NOT MATCHED AND s.club IS NOT NULL THEN INSERT (club_id, code, route_type_id, name, truck_size, requires_full_pallet, requires_half_pallet, is_active)
-     VALUES (s.club, s.code, (SELECT id FROM dbo.route_types WHERE code = N'B2B_DELIVERY'), N'Ruta Los Santos Dry', 5.0, 1, 1, 1);
-MERGE dbo.routes AS t USING (SELECT (SELECT id FROM dbo.clubs WHERE club_number = 6308) AS club, N'6308 05' AS code) AS s
-  ON t.club_id = s.club AND t.code = s.code
-WHEN NOT MATCHED AND s.club IS NOT NULL THEN INSERT (club_id, code, route_type_id, name, truck_size, requires_full_pallet, requires_half_pallet, is_active)
-     VALUES (s.club, s.code, (SELECT id FROM dbo.route_types WHERE code = N'B2B_DELIVERY'), N'Ruta Panajachel Dry', 5.0, 1, 1, 1);
-MERGE dbo.routes AS t USING (SELECT (SELECT id FROM dbo.clubs WHERE club_number = 6308) AS club, N'6308 06' AS code) AS s
-  ON t.club_id = s.club AND t.code = s.code
-WHEN NOT MATCHED AND s.club IS NOT NULL THEN INSERT (club_id, code, route_type_id, name, truck_size, requires_full_pallet, requires_half_pallet, is_active)
-     VALUES (s.club, s.code, (SELECT id FROM dbo.route_types WHERE code = N'B2B_DELIVERY'), N'Ruta Los Santos Dry', 5.0, 1, 1, 1);
-MERGE dbo.routes AS t USING (SELECT (SELECT id FROM dbo.clubs WHERE club_number = 6308) AS club, N'6308 07' AS code) AS s
-  ON t.club_id = s.club AND t.code = s.code
-WHEN NOT MATCHED AND s.club IS NOT NULL THEN INSERT (club_id, code, route_type_id, name, truck_size, requires_full_pallet, requires_half_pallet, is_active)
-     VALUES (s.club, s.code, (SELECT id FROM dbo.route_types WHERE code = N'B2B_DELIVERY'), N'Mazatenango  Retalhueleu Dry', 5.0, 1, 1, 1);
-MERGE dbo.routes AS t USING (SELECT (SELECT id FROM dbo.clubs WHERE club_number = 6308) AS club, N'6308 08' AS code) AS s
-  ON t.club_id = s.club AND t.code = s.code
-WHEN NOT MATCHED AND s.club IS NOT NULL THEN INSERT (club_id, code, route_type_id, name, truck_size, requires_full_pallet, requires_half_pallet, is_active)
-     VALUES (s.club, s.code, (SELECT id FROM dbo.route_types WHERE code = N'B2B_INTRACITY'), N'Entrega Exclusiva Dry', 1.0, 1, 1, 1);
 MERGE dbo.routes AS t USING (SELECT (SELECT id FROM dbo.clubs WHERE club_number = 6401) AS club, N'6401 01' AS code) AS s
   ON t.club_id = s.club AND t.code = s.code
 WHEN NOT MATCHED AND s.club IS NOT NULL THEN INSERT (club_id, code, route_type_id, name, truck_size, requires_full_pallet, requires_half_pallet, is_active)
@@ -1863,10 +1841,6 @@ MERGE dbo.routes AS t USING (SELECT (SELECT id FROM dbo.clubs WHERE club_number 
   ON t.club_id = s.club AND t.code = s.code
 WHEN NOT MATCHED AND s.club IS NOT NULL THEN INSERT (club_id, code, route_type_id, name, truck_size, requires_full_pallet, requires_half_pallet, is_active)
      VALUES (s.club, s.code, (SELECT id FROM dbo.route_types WHERE code = N'B2B_DELIVERY'), N'MS Water Westmoreland 15T', 15.0, 0, 0, 0);
-MERGE dbo.routes AS t USING (SELECT (SELECT id FROM dbo.clubs WHERE club_number = 8703) AS club, N'8702 03' AS code) AS s
-  ON t.club_id = s.club AND t.code = s.code
-WHEN NOT MATCHED AND s.club IS NOT NULL THEN INSERT (club_id, code, route_type_id, name, truck_size, requires_full_pallet, requires_half_pallet, is_active)
-     VALUES (s.club, s.code, (SELECT id FROM dbo.route_types WHERE code = N'B2B_INTRACITY'), N'Clarendon/Manchester Dual temp', 5.0, 1, 1, 1);
 MERGE dbo.routes AS t USING (SELECT (SELECT id FROM dbo.clubs WHERE club_number = 8901) AS club, N'8901 01' AS code) AS s
   ON t.club_id = s.club AND t.code = s.code
 WHEN NOT MATCHED AND s.club IS NOT NULL THEN INSERT (club_id, code, route_type_id, name, truck_size, requires_full_pallet, requires_half_pallet, is_active)
@@ -3335,78 +3309,6 @@ WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_l
 MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6307 AND r.code = N'6307 13') AS rid, N'QUARTER_PALLET' AS ut) AS s
   ON t.route_id = s.rid AND t.unit_type = s.ut
 WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 116.0, 15.0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 01') AS rid, N'FULL_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 266.0, 0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 01') AS rid, N'HALF_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 133.0, 0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 01') AS rid, N'QUARTER_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 67.0, 9.0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 02') AS rid, N'FULL_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 266.0, 0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 02') AS rid, N'HALF_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 133.0, 0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 02') AS rid, N'QUARTER_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 67.0, 9.0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 03') AS rid, N'FULL_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 266.0, 0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 03') AS rid, N'HALF_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 133.0, 0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 03') AS rid, N'QUARTER_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 67.0, 9.0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 04') AS rid, N'FULL_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 266.0, 0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 04') AS rid, N'HALF_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 133.0, 0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 04') AS rid, N'QUARTER_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 67.0, 9.0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 05') AS rid, N'FULL_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 266.0, 0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 05') AS rid, N'HALF_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 133.0, 0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 05') AS rid, N'QUARTER_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 67.0, 9.0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 06') AS rid, N'FULL_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 266.0, 0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 06') AS rid, N'HALF_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 133.0, 0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 06') AS rid, N'QUARTER_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 67.0, 9.0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 07') AS rid, N'FULL_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 266.0, 0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 07') AS rid, N'HALF_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 133.0, 0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 07') AS rid, N'QUARTER_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 67.0, 9.0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 08') AS rid, N'FULL_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 1.0, 0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 08') AS rid, N'HALF_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 1.0, 0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6308 AND r.code = N'6308 08') AS rid, N'QUARTER_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 1.0, 1.0);
 MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 6401 AND r.code = N'6401 01') AS rid, N'FULL_PALLET' AS ut) AS s
   ON t.route_id = s.rid AND t.unit_type = s.ut
 WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 186.0, 0);
@@ -5711,15 +5613,6 @@ WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_l
 MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 8702 AND r.code = N'8702 53') AS rid, N'QUARTER_PALLET' AS ut) AS s
   ON t.route_id = s.rid AND t.unit_type = s.ut
 WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 0.0, 0.0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 8703 AND r.code = N'8702 03') AS rid, N'FULL_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 4650.0, 0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 8703 AND r.code = N'8702 03') AS rid, N'HALF_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 2325.0, 0);
-MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 8703 AND r.code = N'8702 03') AS rid, N'QUARTER_PALLET' AS ut) AS s
-  ON t.route_id = s.rid AND t.unit_type = s.ut
-WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 0.0, 0.0);
 MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = 8901 AND r.code = N'8901 01') AS rid, N'FULL_PALLET' AS ut) AS s
   ON t.route_id = s.rid AND t.unit_type = s.ut
 WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, 648.0, 0);
@@ -6050,7 +5943,7 @@ WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, n
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'JM') AS cid, N'Passport' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
 WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'Passport', N'Pasaporte', N'99999999999999999999');
+     VALUES (s.cid, s.code, N'Passport', N'Pasaporte', N'999999999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'JM') AS cid, N'Tax Registration Number' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
 WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
@@ -6059,10 +5952,6 @@ MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries
   ON t.country_id = s.cid AND t.code = s.code
 WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
      VALUES (s.cid, s.code, N'National ID', N'ID Nacional', N'999999999999');
-MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'JM') AS cid, N'Passport' AS code) AS s
-  ON t.country_id = s.cid AND t.code = s.code
-WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
-     VALUES (s.cid, s.code, N'Passport', N'Pasaporte', N'999999999999999');
 MERGE dbo.fiscal_document_types AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = N'PA') AS cid, N'ID' AS code) AS s
   ON t.country_id = s.cid AND t.code = s.code
 WHEN NOT MATCHED AND s.cid IS NOT NULL THEN INSERT (country_id, code, name_en, name_es, input_mask)
@@ -7572,3 +7461,40 @@ WHEN NOT MATCHED AND s.cid IS NOT NULL AND s.mid IS NOT NULL THEN INSERT (countr
      VALUES (s.cid, s.mid, 999, 324);
 GO
 
+-- ── Verification ─────────────────────────────────────────────────────────
+-- Counts are what this script was generated to produce. A table showing
+-- FEWER rows means statements did not apply; MORE is fine — rows may have
+-- been added since, and nothing here deletes.
+SET NOCOUNT ON;
+DECLARE @short INT = 0, @actual INT;
+SELECT @actual = COUNT(*) FROM dbo.clubs;
+IF @actual < 61 BEGIN SET @short = @short + 1;
+    RAISERROR('clubs                    expected >= 61     actual %d', 10, 1, @actual) WITH NOWAIT; END
+ELSE RAISERROR('clubs                    ok (%d)', 0, 1, @actual) WITH NOWAIT;
+SELECT @actual = COUNT(*) FROM dbo.route_types;
+IF @actual < 3 BEGIN SET @short = @short + 1;
+    RAISERROR('route_types              expected >= 3      actual %d', 10, 1, @actual) WITH NOWAIT; END
+ELSE RAISERROR('route_types              ok (%d)', 0, 1, @actual) WITH NOWAIT;
+SELECT @actual = COUNT(*) FROM dbo.routes;
+IF @actual < 434 BEGIN SET @short = @short + 1;
+    RAISERROR('routes                   expected >= 434    actual %d', 10, 1, @actual) WITH NOWAIT; END
+ELSE RAISERROR('routes                   ok (%d)', 0, 1, @actual) WITH NOWAIT;
+SELECT @actual = COUNT(*) FROM dbo.route_prices;
+IF @actual < 1302 BEGIN SET @short = @short + 1;
+    RAISERROR('route_prices             expected >= 1302   actual %d', 10, 1, @actual) WITH NOWAIT; END
+ELSE RAISERROR('route_prices             ok (%d)', 0, 1, @actual) WITH NOWAIT;
+SELECT @actual = COUNT(*) FROM dbo.fiscal_document_types;
+IF @actual < 32 BEGIN SET @short = @short + 1;
+    RAISERROR('fiscal_document_types    expected >= 32     actual %d', 10, 1, @actual) WITH NOWAIT; END
+ELSE RAISERROR('fiscal_document_types    ok (%d)', 0, 1, @actual) WITH NOWAIT;
+SELECT @actual = COUNT(*) FROM dbo.payment_method_types;
+IF @actual < 99 BEGIN SET @short = @short + 1;
+    RAISERROR('payment_method_types     expected >= 99     actual %d', 10, 1, @actual) WITH NOWAIT; END
+ELSE RAISERROR('payment_method_types     ok (%d)', 0, 1, @actual) WITH NOWAIT;
+SELECT @actual = COUNT(*) FROM dbo.country_payment_methods;
+IF @actual < 314 BEGIN SET @short = @short + 1;
+    RAISERROR('country_payment_methods  expected >= 314    actual %d', 10, 1, @actual) WITH NOWAIT; END
+ELSE RAISERROR('country_payment_methods  ok (%d)', 0, 1, @actual) WITH NOWAIT;
+IF @short > 0 RAISERROR('Import incomplete: %d table(s) short. See the lines above.', 16, 1, @short);
+ELSE PRINT 'Import complete.';
+GO
