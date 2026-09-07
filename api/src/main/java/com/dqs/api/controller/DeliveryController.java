@@ -49,13 +49,23 @@ public class DeliveryController {
         return ResponseEntity.ok(Map.of("address", deliveryService.getLastDeliveryAddress(membership)));
     }
 
+    // saveDelivery and deleteDelivery let their exception out so the
+    // transaction actually rolls back — swallowing it inside the @Transactional
+    // method would leave a half-written delivery and then fail at commit time
+    // anyway. The translation to a response body stays here, unchanged, so the
+    // frontend sees exactly the status and payload it saw before.
+
     @PostMapping
     public ResponseEntity<Map<String, Object>> save(@RequestBody Map<String, Object> body) {
         log.info("[DeliveryController] POST / quotationId={}", body.get("quotation_id"));
-        boolean ok = deliveryService.saveDelivery(body);
-        if (!ok) return ResponseEntity.internalServerError()
-            .body(Map.of("success", false, "message", "Error saving delivery"));
-        return ResponseEntity.ok(Map.of("success", true));
+        try {
+            deliveryService.saveDelivery(body);
+            return ResponseEntity.ok(Map.of("success", true));
+        } catch (Exception e) {
+            log.error("[DeliveryController] Error saving delivery: {}", e.getMessage());
+            return ResponseEntity.internalServerError()
+                .body(Map.of("success", false, "message", "Error saving delivery"));
+        }
     }
 
     @Operation(summary = "Obtener datos de delivery por cotización")
@@ -71,7 +81,12 @@ public class DeliveryController {
     @DeleteMapping("/{quotationId}")
     public ResponseEntity<Map<String, Object>> delete(@PathVariable Long quotationId) {
         log.info("[DeliveryController] DELETE /{}", quotationId);
-        boolean ok = deliveryService.deleteDelivery(quotationId);
-        return ResponseEntity.ok(Map.of("success", ok));
+        try {
+            deliveryService.deleteDelivery(quotationId);
+            return ResponseEntity.ok(Map.of("success", true));
+        } catch (Exception e) {
+            log.error("[DeliveryController] Error deleting delivery: {}", e.getMessage());
+            return ResponseEntity.ok(Map.of("success", false));
+        }
     }
 }

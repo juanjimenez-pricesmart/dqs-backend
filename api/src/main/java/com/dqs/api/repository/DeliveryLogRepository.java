@@ -1,13 +1,10 @@
 package com.dqs.api.repository;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.support.GeneratedKeyHolder;
-import org.springframework.jdbc.support.KeyHolder;
+import com.dqs.api.repository.support.NativeQueries;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Repository;
 
-import java.sql.PreparedStatement;
-import java.sql.Statement;
 import java.util.List;
 import java.util.Map;
 
@@ -15,12 +12,13 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class DeliveryLogRepository {
 
-    private final JdbcTemplate jdbcTemplate;
+    private final NativeQueries nativeQueries;
+    private final QuotationDeliveryRepository deliveryRepository;
 
     // ── Queries ───────────────────────────────────────────────────────────────
 
     public List<Map<String, Object>> findAvailableDeliveries(int storeId, String routeId) {
-        return jdbcTemplate.queryForList("""
+        return nativeQueries.list("""
             SELECT qd.id, qd.quotation_id AS quotationId, qd.amount, qd.address,
                    qd.delivery_date AS deliveryDate, qd.hour_from AS hourFrom,
                    qd.hour_to AS hourTo, qd.route_id AS routeId, qd.pallets,
@@ -34,7 +32,7 @@ public class DeliveryLogRepository {
     }
 
     public List<Map<String, Object>> findByStoreAndStatus(int storeId, int statusId, String routeId) {
-        return jdbcTemplate.queryForList("""
+        return nativeQueries.list("""
             SELECT l.logcargueid, l.ps_tienda_id, l.statusid, l.creado_por,
                    l.fecha, l.hora, l.fechacierre, l.fechaenvio, l.delivery_ruta,
                    COUNT(qd.id) AS delivery_count
@@ -47,7 +45,7 @@ public class DeliveryLogRepository {
     }
 
     public List<Map<String, Object>> findDeliveriesByLogId(long logId) {
-        return jdbcTemplate.queryForList("""
+        return nativeQueries.list("""
             SELECT qd.id, qd.quotation_id AS quotationId, qd.amount, qd.address,
                    qd.delivery_date AS deliveryDate, qd.hour_from AS hourFrom,
                    qd.hour_to AS hourTo, qd.route_id AS routeId, qd.pallets,
@@ -60,41 +58,43 @@ public class DeliveryLogRepository {
     }
 
     public Map<String, Object> findById(long logId) {
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+        List<Map<String, Object>> rows = nativeQueries.list(
             "SELECT * FROM ps_delivery_log_cargue WHERE logcargueid = ?", logId);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
     // ── Mutations ─────────────────────────────────────────────────────────────
 
+    /** Must stay transactional: the generated key is read on the same connection. */
+    @Transactional
     public long createLog(int storeId, int createdBy, String routeId) {
-        KeyHolder keys = new GeneratedKeyHolder();
-        jdbcTemplate.update(con -> {
-            PreparedStatement ps = con.prepareStatement(
-                "INSERT INTO ps_delivery_log_cargue " +
-                "  (fecha, hora, ps_tienda_id, empresaid, creado_por, statusid, quote_type, delivery_ruta) " +
-                "VALUES (CURDATE(), CURTIME(), ?, 1, ?, 2, 1, ?)",
-                Statement.RETURN_GENERATED_KEYS);
-            ps.setInt(1, storeId);
-            ps.setInt(2, createdBy);
-            ps.setString(3, routeId);
-            return ps;
-        }, keys);
-        return keys.getKey().longValue();
+        return nativeQueries.insertReturningKey(
+            "INSERT INTO ps_delivery_log_cargue " +
+            "  (fecha, hora, ps_tienda_id, empresaid, creado_por, statusid, quote_type, delivery_ruta) " +
+            "VALUES (CURDATE(), CURTIME(), ?, 1, ?, 2, 1, ?)",
+            storeId, createdBy, routeId);
     }
 
+    /**
+     * `quotation_delivery` is ours and mapped, so this goes through the entity
+     * rather than a native UPDATE — a raw statement would leave any instance
+     * already loaded in the persistence context holding a stale logcargueid.
+     */
+    @Transactional
     public int linkDeliveriesToLog(List<Long> quotationIds, long logId) {
         int updated = 0;
         for (Long quotationId : quotationIds) {
-            updated += jdbcTemplate.update(
-                "UPDATE quotation_delivery SET logcargueid = ? WHERE quotation_id = ?",
-                logId, quotationId);
+            var delivery = deliveryRepository.findByQuotation_Id(quotationId).orElse(null);
+            if (delivery == null) continue;
+            delivery.setLogCargueId((double) logId);
+            deliveryRepository.save(delivery);
+            updated++;
         }
         return updated;
     }
 
     public int closeLog(long logId) {
-        return jdbcTemplate.update(
+        return nativeQueries.update(
             "UPDATE ps_delivery_log_cargue SET statusid = 3, fechacierre = NOW(), fechaenvio = NOW() " +
             "WHERE logcargueid = ?", logId);
     }

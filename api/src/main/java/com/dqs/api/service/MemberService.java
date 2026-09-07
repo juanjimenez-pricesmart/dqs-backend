@@ -5,7 +5,7 @@ import com.dqs.api.client.BusinessApiClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.core.JdbcTemplate;
+import com.dqs.api.repository.support.NativeQueries;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -18,7 +18,7 @@ public class MemberService {
 
     private final BusinessApiClient businessApiClient;
     private final ObjectMapper objectMapper;
-    private final JdbcTemplate jdbcTemplate;
+    private final NativeQueries nativeQueries;
 
     @SuppressWarnings("unchecked")
     public Map<String, Object> getMember(String membership) {
@@ -36,7 +36,7 @@ public class MemberService {
     public List<Map<String, Object>> searchMembers(String name) {
         String term = name == null ? "" : name.trim();
         if (term.length() < 2) return List.of();
-        return jdbcTemplate.queryForList(
+        return nativeQueries.list(
             "SELECT tarjeta, nombre, correo, ps_tienda_id, ps_pais_iso2 " +
             "FROM ps_socios_dqs20 WHERE nombre LIKE ? ORDER BY nombre LIMIT 50",
             "%" + term.replace("%", "\\%") + "%");

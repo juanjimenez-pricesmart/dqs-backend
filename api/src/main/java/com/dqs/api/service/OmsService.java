@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.jdbc.core.JdbcTemplate;
+import com.dqs.api.repository.support.NativeQueries;
 import org.springframework.stereotype.Service;
 
 import java.io.*;
@@ -24,7 +24,7 @@ import java.security.cert.X509Certificate;
 @RequiredArgsConstructor
 public class OmsService {
 
-    private final JdbcTemplate jdbcTemplate;
+    private final NativeQueries nativeQueries;
     private final ObjectMapper objectMapper;
 
     @Value("${oms.base-url}")
@@ -44,7 +44,7 @@ public class OmsService {
                 quotationId, storeId, membership);
 
         // Store
-        List<Map<String, Object>> storeRows = jdbcTemplate.queryForList(
+        List<Map<String, Object>> storeRows = nativeQueries.list(
             "SELECT ps_tienda_id, nombre, moneda, idioma, pais_iso2, impuesto_operacion " +
             "FROM ps_tienda WHERE ps_tienda_id = ?", storeId);
 
@@ -52,7 +52,7 @@ public class OmsService {
 
         // Exchange rate — most recent
         String countryIso2 = (String) club.getOrDefault("pais_iso2", "CR");
-        List<Map<String, Object>> exchangeRateRows = jdbcTemplate.queryForList(
+        List<Map<String, Object>> exchangeRateRows = nativeQueries.list(
             "SELECT ps_tasa_cambio_tipocambio FROM ps_tasa_cambio " +
             "WHERE ps_pais_iso2 = ? ORDER BY ps_tasa_cambio_id DESC LIMIT 1", countryIso2);
 
@@ -60,7 +60,7 @@ public class OmsService {
             : ((Number) exchangeRateRows.get(0).get("ps_tasa_cambio_tipocambio")).doubleValue();
 
         // User
-        List<Map<String, Object>> userRows = jdbcTemplate.queryForList(
+        List<Map<String, Object>> userRows = nativeQueries.list(
             "SELECT id, email FROM users WHERE id = ?", userId);
 
         Map<String, Object> userRaw = userRows.isEmpty()
@@ -83,7 +83,7 @@ public class OmsService {
         // FEL — Guatemala only (6300-6399)
         Map<String, Object> fel = null;
         if (storeId >= 6300 && storeId <= 6399) {
-            List<Map<String, Object>> felRows = jdbcTemplate.queryForList(
+            List<Map<String, Object>> felRows = nativeQueries.list(
                 "SELECT psf.nit, psf.businessname, psf.address, psf.phone, psf.email, " +
                 "psf.nit_validated, pf.nombre_en as doc_type_name " +
                 "FROM ps_socios_fel psf " +
@@ -170,7 +170,7 @@ public class OmsService {
 
     private void overrideWithLocalMember(String membership, Map<String, Object> member) {
         try {
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+            List<Map<String, Object>> rows = nativeQueries.list(
                 "SELECT addressLine1, cellPhone, email, businessName " +
                 "FROM ps_socios WHERE membership = ?", membership);
 

@@ -896,39 +896,22 @@ CREATE TABLE delivery_loads (
     CONSTRAINT fk_dl_user  FOREIGN KEY (created_by_user_id) REFERENCES users (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- One optional delivery per quotation (unifies quotation_delivery +
--- orders_delivery). route_name/unit_price/amount/window are SNAPSHOTS of what
--- was quoted; route_id stays a real FK for grouping into loads. Source of
--- truth for the delivery charge (quotation_totals.delivery_amount is its
--- close-time rollup).
-CREATE TABLE quotation_deliveries (
-    id                BIGINT        NOT NULL AUTO_INCREMENT,
-    quotation_id      BIGINT        NOT NULL,
-    route_id          INT           NULL,
-    route_name        VARCHAR(200)  NULL COMMENT 'SNAPSHOT of routes.name',
-    delivery_load_id  BIGINT        NULL,
-    quantity          DECIMAL(12,4) NOT NULL DEFAULT 1 COMMENT 'billed units (pallets/trips)',
-    unit_price        DECIMAL(15,4) NOT NULL DEFAULT 0 COMMENT 'SNAPSHOT of route_prices at quote time (local currency)',
-    amount            DECIMAL(15,4) NOT NULL DEFAULT 0 COMMENT 'quantity * unit_price, SNAPSHOT',
-    address           VARCHAR(500)  NULL,
-    city_id           INT           NULL,
-    delivery_date     DATE          NULL,
-    window_start      TIME          NULL COMMENT 'chosen slot from Business API delivery windows',
-    window_end        TIME          NULL,
-    ring_code         VARCHAR(50)   NULL,
-    box_code          VARCHAR(50)   NULL,
-    pallet_count      DECIMAL(10,2) NULL,
-    created_at        TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at        TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (id),
-    UNIQUE KEY uq_qd_quotation (quotation_id),
-    KEY idx_qd_load (delivery_load_id),
-    KEY idx_qd_route_unassigned (route_id, delivery_load_id, delivery_date),
-    CONSTRAINT fk_qd_quotation FOREIGN KEY (quotation_id)     REFERENCES quotations (id),
-    CONSTRAINT fk_qd_route     FOREIGN KEY (route_id)         REFERENCES routes (id),
-    CONSTRAINT fk_qd_load      FOREIGN KEY (delivery_load_id) REFERENCES delivery_loads (id),
-    CONSTRAINT fk_qd_city      FOREIGN KEY (city_id)          REFERENCES cities (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+-- Deliveries live in `quotation_delivery` (singular), created by
+-- migration_delivery.sql and completed by
+-- migration_quotation_delivery_missing_columns.sql.
+--
+-- A second table, `quotation_deliveries` (plural), used to be declared here as
+-- part of the 3NF design: route_id as a real FK to `routes`, quantity /
+-- unit_price / amount as snapshots, delivery_load_id for grouping into loads.
+-- It was never created in any database and no code ever referenced it, while
+-- the singular table holds the live rows and every read and write the
+-- application makes. Two declarations of the same concept, one of them dead, is
+-- a trap for whoever reads this file next, so the plural one is gone.
+--
+-- Nothing of the design is lost by removing it. Reinstating that model means
+-- creating `routes`, `route_prices`, `route_types` and `delivery_loads` as well
+-- — none of which exist either — and migrating the rows across. That is a piece
+-- of work in its own right, not a table declaration.
 
 -- ────────────────────────────────────────────────────────────────────────────
 -- 13. Documents & notes

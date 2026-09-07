@@ -1,7 +1,7 @@
 package com.dqs.api.repository;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.jdbc.core.JdbcTemplate;
+import com.dqs.api.repository.support.NativeQueries;
 import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
@@ -14,7 +14,7 @@ public class QuotationListRepository {
 
     private static final int STATUS_PENDING = 1;
 
-    private final JdbcTemplate jdbcTemplate;
+    private final NativeQueries nativeQueries;
 
     public List<Map<String, Object>> findByStoreFiltered(int storeId, int statusId,
                                                          boolean mineOnly, Integer userId,
@@ -68,11 +68,11 @@ public class QuotationListRepository {
 
         sql.append(" ORDER BY q.id DESC");
 
-        return jdbcTemplate.queryForList(sql.toString(), params.toArray());
+        return nativeQueries.list(sql.toString(), params.toArray());
     }
 
     public List<Map<String, Object>> findDeliveriesByStore(int storeId) {
-        return jdbcTemplate.queryForList("""
+        return nativeQueries.list("""
             SELECT CONCAT(LPAD(qd.hour_from, 2, '0'), ':00-', LPAD(qd.hour_to, 2, '0'), ':00') AS hour,
                    qd.delivery_date AS deliveryDate,
                    q.id AS quotationId,
@@ -94,7 +94,7 @@ public class QuotationListRepository {
 
     public List<Map<String, Object>> findSummaryByStatus(int storeId, Integer periodId) {
         int[] monthYear = resolvePeriod(periodId);
-        return jdbcTemplate.queryForList("""
+        return nativeQueries.list("""
             SELECT q.status_id AS statusId,
                    COUNT(q.id) AS count,
                    ROUND(COALESCE(SUM(qt.net_amount), 0), 2) AS totalAmount
@@ -118,7 +118,7 @@ public class QuotationListRepository {
     }
 
     public List<Map<String, Object>> findPeriods() {
-        return jdbcTemplate.queryForList("""
+        return nativeQueries.list("""
             SELECT c.ps_cierre_mensual_id AS id,
                    c.ps_cierre_mensual_mes AS month,
                    c.ps_cierre_mensual_anio AS year,
@@ -134,7 +134,7 @@ public class QuotationListRepository {
         if (periodId == null) {
             return new int[]{0, 0};
         }
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+        List<Map<String, Object>> rows = nativeQueries.list(
                 "SELECT ps_cierre_mensual_mes, ps_cierre_mensual_anio FROM ps_cierre_mensual WHERE ps_cierre_mensual_id = ?",
                 periodId);
         if (rows.isEmpty()) {

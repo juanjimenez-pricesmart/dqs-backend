@@ -5,7 +5,7 @@ import com.dqs.api.model.Quotation;
 import com.dqs.api.repository.QuotationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.core.JdbcTemplate;
+import com.dqs.api.repository.support.NativeQueries;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,7 +20,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class GlobalPayService {
 
-    private final JdbcTemplate jdbcTemplate;
+    private final NativeQueries nativeQueries;
     private final QuotationRepository quotationRepository;
 
     /**
@@ -30,7 +30,7 @@ public class GlobalPayService {
     public Map<String, Object> getPaymentToken(Integer storeId) {
         log.info("[GlobalPayService] getPaymentToken storeId={}", storeId);
 
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+        List<Map<String, Object>> rows = nativeQueries.list(
                 "SELECT server_appcode, server_appkey FROM ps_globalpay_credenciales WHERE store_id = ? LIMIT 1",
                 storeId);
 
