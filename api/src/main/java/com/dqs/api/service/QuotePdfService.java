@@ -46,7 +46,7 @@ public class QuotePdfService {
 
         // 2. Filter delivery item from regular items
         List<QuotationItemResponse> items = allItems.stream()
-            .filter(i -> !DeliveryService.DELIVERY_PRODUCT_ID.equals(i.getProductId()))
+            .filter(i -> com.dqs.api.util.SpecialItems.isRegularLine(i.getProductId()))
             .toList();
 
         // 3. Totals

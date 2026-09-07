@@ -29,12 +29,14 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class QuotationService {
 
+
     private final QuotationRepository quotationRepository;
     private final QuotationItemRepository quotationItemRepository;
     private final com.dqs.api.repository.QuotationCancelRepository quotationCancelRepository;
     private final OmsService omsService;
     private final OmsPayloadBuilder omsPayloadBuilder;
     private final ObjectMapper objectMapper;
+    private final ItemService itemService;
 
     @Value("${idp.base-url}")
     private String idpBaseUrl;
@@ -186,10 +188,148 @@ public class QuotationService {
         return toItemResponse(saved);
     }
 
+    // ── Bulk add (Copy & Paste Excel) ─────────────────────────────────────
+
+    /**
+     * Adds many lines at once from pasted spreadsheet rows.
+     *
+     * The client sends only code and quantity — the catalog lookup happens
+     * here, exactly as legacy's orders/csvcreardetalle does. Doing it in the
+     * browser would mean two round trips per code, so fifty pasted rows would
+     * be a hundred requests.
+     *
+     * Legacy quantity rules are preserved: an empty or zero quantity becomes 1,
+     * and a code already on the quotation has its quantity SUMMED. saveItem on
+     * its own replaces the quantity — the single-add path sums in the browser
+     * before calling it — so the sum is done here.
+     *
+     * Codes the catalog does not know are reported back rather than failing the
+     * whole paste; legacy lists them under "Items no copiados". The delivery
+     * SKU is reported separately: adding it as a plain line would leave a row
+     * with no quotation_delivery record behind it, which no screen can then
+     * edit. It belongs to the Envio form.
+     */
+    @Transactional
+    public java.util.Map<String, Object> addItemsBulk(Long quotationId, Integer clubId,
+                                                      List<java.util.Map<String, Object>> lines) {
+        findOrThrow(quotationId);
+
+        List<String> added = new java.util.ArrayList<>();
+        List<String> notFound = new java.util.ArrayList<>();
+        List<String> skipped = new java.util.ArrayList<>();
+
+        for (java.util.Map<String, Object> line : lines) {
+            Object codeRaw = line.get("productId");
+            if (codeRaw == null || codeRaw.toString().isBlank()) continue;
+            String code = codeRaw.toString().trim();
+
+            BigDecimal qty = BigDecimal.ONE;
+            Object qtyRaw = line.get("qty");
+            if (qtyRaw != null && !qtyRaw.toString().isBlank()) {
+                try {
+                    BigDecimal parsed = new BigDecimal(qtyRaw.toString().trim());
+                    if (parsed.compareTo(BigDecimal.ZERO) > 0) qty = parsed;
+                } catch (NumberFormatException ignored) {
+                    // Legacy treats anything unparseable as the default of 1.
+                }
+            }
+
+            // Owned by its own panel: a plain add would leave a line with no
+            // backing record behind it.
+            if (com.dqs.api.util.SpecialItems.has(code, com.dqs.api.util.SpecialItems.Trait.OWNED_BY_PANEL)) {
+                skipped.add(code);
+                continue;
+            }
+
+            java.util.Map<String, Object> catalog;
+            try {
+                catalog = itemService.getItemByCode(code, clubId);
+            } catch (Exception e) {
+                log.warn("[QuotationService] bulk: catalog lookup failed for {}: {}", code, e.getMessage());
+                notFound.add(code);
+                continue;
+            }
+            if (catalog == null || catalog.get("item_code") == null) {
+                notFound.add(code);
+                continue;
+            }
+
+            // Sum into an existing line, as legacy does for a repeated code.
+            BigDecimal finalQty = quotationItemRepository
+                    .findByQuotation_IdAndProductId(quotationId, code)
+                    .map(existing -> coalesce(existing.getQty(), BigDecimal.ZERO))
+                    .orElse(BigDecimal.ZERO)
+                    .add(qty);
+
+            saveItem(quotationId, toItemRequest(catalog, finalQty));
+            added.add(code);
+        }
+
+        log.info("[QuotationService] addItemsBulk quotation_id={} added={} notFound={} skipped={}",
+                quotationId, added.size(), notFound.size(), skipped.size());
+        return java.util.Map.of("added", added, "notFound", notFound, "skipped", skipped);
+    }
+
+    /** Maps a catalog row onto the same request shape a single add uses. */
+    private QuotationItemRequest toItemRequest(java.util.Map<String, Object> c, BigDecimal qty) {
+        QuotationItemRequest req = new QuotationItemRequest();
+        req.setProductId(str(c.get("item_code")));
+        req.setDescription(str(c.get("description")).trim());
+        req.setQty(qty);
+        req.setRate(dec(c.get("sellPrice")));
+        req.setSignPrice(dec(c.get("sign_price")));
+        // The catalog carries IVA and VAT side by side; whichever is populated
+        // is the one that applies, matching what the single-add path sends.
+        req.setTaxPorcentaje(nonZero(dec(c.get("iva_Percent")), dec(c.get("vat_Percent"))));
+        req.setTaxFactor(nonZero(dec(c.get("iva_Amount")), dec(c.get("vat_Amount"))));
+        req.setTaxIco(dec(c.get("ico_Amount")));
+        req.setCuEa(dec(c.get("cu_EA")));
+        req.setPl(dec(c.get("pl")));
+        req.setWeightEa(dec(c.get("weight_EA_KG")));
+        req.setOnhand(dec(c.get("quantityOnHand")));
+        req.setSoldByWeight(str(c.get("soldByWeight")));
+        req.setRecipe(str(c.get("recipe")));
+        req.setStorageType(str(c.get("storageType")));
+        req.setPicture1(str(c.get("image1")).trim());
+        req.setDepartment(str(c.get("department")));
+        req.setCategory(str(c.get("category")));
+        return req;
+    }
+
+    private static String str(Object o) { return o == null ? "" : o.toString(); }
+
+    private static BigDecimal dec(Object o) {
+        if (o == null) return BigDecimal.ZERO;
+        try { return new BigDecimal(o.toString()); } catch (NumberFormatException e) { return BigDecimal.ZERO; }
+    }
+
+    private static BigDecimal nonZero(BigDecimal a, BigDecimal b) {
+        return a != null && a.compareTo(BigDecimal.ZERO) != 0 ? a : b;
+    }
+
     // ── Update item qty ───────────────────────────────────────────────────
 
+    /**
+     * Narrow path kept for the existing PATCH .../items/{itemId}/qty endpoint,
+     * which the lines table calls on every inline quantity edit.
+     */
     @Transactional
     public QuotationItemResponse updateItemQty(Long quotationId, Long itemId, java.util.Map<String, Object> body) {
+        return updateItem(quotationId, itemId, body);
+    }
+
+    /**
+     * Updates one line: quantity, exemption percentage, per-item comment and
+     * the print-image flag. Every key is optional, so a caller sends only what
+     * it changed.
+     *
+     * Legacy spreads this across three endpoints — orders/saveitemqty,
+     * orders/savecomment and orders/saveincludepic — each re-reading and
+     * re-writing the same row. One endpoint for one row keeps the recompute
+     * rules in a single place.
+     */
+    @Transactional
+    public QuotationItemResponse updateItem(Long quotationId, Long itemId, java.util.Map<String, Object> body) {
         findOrThrow(quotationId);
         QuotationItem item = quotationItemRepository.findById(itemId)
                 .orElseThrow(() -> new QuotationNotFoundException(itemId));
@@ -197,7 +337,38 @@ public class QuotationService {
             throw new IllegalArgumentException("Item " + itemId + " does not belong to quotation " + quotationId);
         }
 
-        BigDecimal newQty = new BigDecimal(body.get("qty").toString());
+        if (body.get("qty") != null) {
+            applyQty(item, new BigDecimal(body.get("qty").toString()));
+        }
+
+        // The exemption is recomputed on EVERY call, not just when a percentage
+        // is sent, because it is derived from tax_amount and a quantity change
+        // moves tax_amount. Legacy does the same — OrdersItemModel::updateItem
+        // sets excent_amount unconditionally, outside the `if (!empty($exemp))`
+        // guard. Skipping it left the exempt amount stale after a qty edit.
+        BigDecimal pct = body.get("exemp") != null
+                ? new BigDecimal(body.get("exemp").toString())
+                : (item.getTaxes() != null ? coalesce(item.getTaxes().getExcentPorcentaje(), BigDecimal.ZERO) : BigDecimal.ZERO);
+        applyExemption(item, pct);
+
+        // Item Info drawer: the per-item comment and the "include image in the
+        // quote" flag. Both columns already existed and were read-only.
+        if (body.get("icomments") != null) {
+            String comment = body.get("icomments").toString();
+            // orders_item.icomments is VARCHAR(500); truncate rather than let
+            // the driver reject the write.
+            item.setIcomments(comment.length() > 500 ? comment.substring(0, 500) : comment);
+        }
+        if (body.get("includepic") != null) {
+            Object raw = body.get("includepic");
+            boolean include = raw instanceof Boolean b ? b : !"0".equals(raw.toString()) && !"false".equalsIgnoreCase(raw.toString());
+            item.setIncludepic(include ? 1 : 0);
+        }
+
+        return toItemResponse(quotationItemRepository.save(item));
+    }
+
+    private void applyQty(QuotationItem item, BigDecimal newQty) {
         BigDecimal signPrice = coalesce(item.getSignPrice(), BigDecimal.ZERO);
         BigDecimal taxFactor = item.getTaxes() != null ? coalesce(item.getTaxes().getTaxFactor(), BigDecimal.ZERO) : BigDecimal.ZERO;
 
@@ -207,18 +378,59 @@ public class QuotationService {
             item.getTaxes().setTaxAmount(newQty.multiply(taxFactor).setScale(4, java.math.RoundingMode.HALF_UP));
         }
 
-        QuotationItem pl = item.getProduct() != null ? item : item;
-        BigDecimal plVal = item.getProduct() != null ? coalesce(item.getProduct().getPl(), BigDecimal.ONE) : BigDecimal.ONE;
-        BigDecimal weightEa = item.getProduct() != null ? coalesce(item.getProduct().getWeightEa(), BigDecimal.ZERO) : BigDecimal.ZERO;
         if (item.getProduct() != null) {
+            BigDecimal plVal = coalesce(item.getProduct().getPl(), BigDecimal.ONE);
+            BigDecimal weightEa = coalesce(item.getProduct().getWeightEa(), BigDecimal.ZERO);
             item.getProduct().setWeightResult(newQty.multiply(weightEa).setScale(4, java.math.RoundingMode.HALF_UP));
             item.getProduct().setPalletxqty(plVal.compareTo(BigDecimal.ZERO) != 0
                     ? newQty.divide(plVal, 4, java.math.RoundingMode.HALF_UP)
                     : BigDecimal.ZERO);
         }
 
-        log.info("[QuotationService] updateItemQty id={} qty={}", itemId, newQty);
-        return toItemResponse(quotationItemRepository.save(item));
+        log.info("[QuotationService] updateItem id={} qty={}", item.getId(), newQty);
+    }
+
+    /**
+     * Exemption percentage, with legacy's formula:
+     *
+     *   excent_amount = ROUND((excent_porcentaje / tax_porcentaje) * tax_amount, 2)
+     *
+     * (OrdersItemModel::updateItem). Two guards legacy gets for free from
+     * MySQL and Java does not:
+     *
+     *  - tax_porcentaje = 0 makes MySQL return NULL for that division; in Java
+     *    it would throw, so a zero rate means zero exemption.
+     *  - the percentage is capped at the line's own tax percentage. Legacy only
+     *    enforces that in the browser (data-max-tax on #item_exemp), which any
+     *    caller can bypass, so it is enforced here too.
+     */
+    private void applyExemption(QuotationItem item, BigDecimal requested) {
+        if (item.getTaxes() == null) return;
+
+        BigDecimal taxPct = coalesce(item.getTaxes().getTaxPorcentaje(), BigDecimal.ZERO);
+        BigDecimal taxAmount = coalesce(item.getTaxes().getTaxAmount(), BigDecimal.ZERO);
+
+        // No tax on the line means there is nothing to exempt, so the percentage
+        // is forced to zero rather than stored. Keeping a percentage against a
+        // zero rate leaves a figure that reads as meaningful and is not: it
+        // can never produce an exempt amount.
+        BigDecimal pct = requested.max(BigDecimal.ZERO);
+        if (taxPct.compareTo(BigDecimal.ZERO) <= 0) {
+            pct = BigDecimal.ZERO;
+        } else if (pct.compareTo(taxPct) > 0) {
+            pct = taxPct;
+        }
+
+        BigDecimal excentAmount = taxPct.compareTo(BigDecimal.ZERO) == 0
+                ? BigDecimal.ZERO
+                : pct.divide(taxPct, 10, java.math.RoundingMode.HALF_UP)
+                     .multiply(taxAmount)
+                     .setScale(2, java.math.RoundingMode.HALF_UP);
+
+        item.getTaxes().setExcentPorcentaje(pct);
+        item.getTaxes().setExcentAmount(excentAmount);
+
+        log.info("[QuotationService] updateItem id={} exemption={}% amount={}", item.getId(), pct, excentAmount);
     }
 
     // ── Delete item ───────────────────────────────────────────────────────

@@ -57,7 +57,8 @@ ul.risks{margin:8px 0 0;padding-left:20px;color:var(--muted)}ul.risks li{margin-
 
 <div class="stats">
 <div class="stat k"><b>28</b><span>endpoints built</span></div>
-<div class="stat m"><b>19</b><span>backend tasks pending</span></div>
+<div class="stat k"><b>4</b><span>delivered</span></div>
+<div class="stat m"><b>17</b><span>still pending</span></div>
 <div class="stat m"><b>4</b><span>schema items pending</span></div>
 </div>
 
@@ -106,6 +107,22 @@ ul.risks{margin:8px 0 0;padding-left:20px;color:var(--muted)}ul.risks li{margin-
   <li><span class="method post">POST</span><span class="ep-path">/api/v1/payments/callback</span><span class="ep-desc">— payment webhook</span></li>
   <li><span class="method get">GET</span><span class="ep-path">/api/v1/diag/stores</span><span class="ep-desc">— store list (interim diagnostic hack — replace with B4)</span></li>
 </ul>
+
+<h2>Delivered since this document was written</h2>
+<p class="lede">These are done and merged into the parity branch. Read this before picking up B1–B19 — two of them are no longer what they say, and the endpoints below are the ones to extend rather than duplicate.</p>
+<div class="tablewrap"><table>
+<tr><th>What</th><th>Detail</th></tr>
+<tr><td class="step">PATCH /quotations/{id}/items/{itemId}</td><td class="detail"><b>One endpoint for one line.</b> Takes optional <code>qty</code>, <code>exemp</code>, <code>icomments</code> and <code>includepic</code>. Legacy spreads these across <code>orders/saveitemqty</code>, <code>orders/savecomment</code> and <code>orders/saveincludepic</code>, each re-reading and re-writing the same row; extend this one rather than adding a fourth path. The narrower <code>.../qty</code> stays for the table's inline edits.</td></tr>
+<tr><td class="step">Exemption persistence</td><td class="detail">Legacy's formula: <code>excent_amount = ROUND((excent_porcentaje / tax_porcentaje) * tax_amount, 2)</code>. Three guards legacy does not have: a zero tax rate yields zero rather than throwing (MySQL returns NULL there, Java throws), a line with no tax has its percentage forced to zero rather than storing a figure that can never apply, and the cap at the line's own tax is enforced server-side — legacy only enforces it in the browser via <code>data-max-tax</code>. <b>The exempt amount is recomputed on every call</b>, not only when a percentage is sent, because it derives from <code>tax_amount</code> and a quantity change moves it.</td></tr>
+<tr><td class="step">POST /quotations/{id}/items/bulk</td><td class="detail">For the Copy &amp; Paste Excel drawer. Takes <code>{clubId, lines:[{productId, qty}]}</code> and does the catalog lookup server-side, as <code>csvcreardetalle</code> does — from the browser it would be two round trips per code. Empty or unparseable quantity becomes 1, repeated codes are <b>summed</b>, unknown codes come back in <code>notFound</code>, and panel-owned codes in <code>skipped</code>.</td></tr>
+<tr><td class="step">util/SpecialItems</td><td class="detail"><b>Register the incoming special item here.</b> Each code is declared with the traits that explain why it is treated differently — <code>EXCLUDED_FROM_LINE_TOTALS</code>, <code>OWNED_BY_PANEL</code>, <code>PRESET_AMOUNT</code>. Callers ask <code>SpecialItems.has(code, trait)</code>, never <code>"888905".equals(code)</code>. Mirrored by the frontend's <code>src/constants/specialItems.ts</code>; keep the two in step.</td></tr>
+<tr><td class="step">B8 — include-image flag</td><td class="detail"><span class="badge match">DONE</span> Saved through the line endpoint above. No new column: <code>QuotationItem.includepic</code> already existed.</td></tr>
+<tr><td class="step">B7 — comments</td><td class="detail"><span class="badge differs">HALF DONE</span> The <b>per-item</b> comment now persists via the line endpoint. What remains is the <b>quote-level</b> one: <code>model/Quotation.java</code> still has no comment column, so the frontend keeps it in <code>localStorage</code>. That is the whole of B7 now.</td></tr>
+</table></div>
+
+<div class="note"><b>B5 got more urgent.</b> The frontend needs <code>paymentLinkEnabled</code> per club for a concrete reason: on those clubs legacy restricts the quantity field to whole units and blocks the <code>.</code> and <code>,</code> keys. The sanitiser is written and takes the flag; it cannot be switched on until the capability is exposed.</div>
+
+<div class="note"><b>B2 is the last thing keeping hardcoded colours in the frontend.</b> The list still falls back to a local hex map for the status badges because the API does not send <code>orders_status.flagcolor</code>. Everything else on that screen now comes from the shared layer.</div>
 
 <h2>Backend work needed — priority table</h2>
 <div class="tablewrap"><table>
@@ -174,7 +191,7 @@ ul.risks{margin:8px 0 0;padding-left:20px;color:var(--muted)}ul.risks li{margin-
 <tr>
 <td class="num">B7</td>
 <td>
-  <div class="step">Quote comment save <span style="color:var(--warn)">— half of it already persists</span></div>
+  <div class="step">Quote comment save <span style="color:var(--warn)">— per-item DONE; only the quote-level column remains</span></div>
   <div style="margin-top:6px;font-size:12px;color:var(--muted)"><b>The per-item comment column already exists:</b> <code>QuotationItem.icomments</code> maps <code>icomments VARCHAR(500)</code>. Only the <b>quote-level</b> comment has nowhere to go — <code>model/Quotation.java</code> has no comment column, which is why the frontend keeps it in <code>localStorage</code> (<code>db72900</code>) as a stopgap. <b>Real work:</b> add the header column, then expose <code>POST /api/v1/quotations/{id}/comment</code> with body <code>{text, itemId}</code> where <code>itemId=0</code> means quote-level and any other value writes <code>icomments</code>. ENTER-save is frontend behavior; the backend only persists.</div>
 </td>
 <td class="detail"><code>Orders::savecomment</code></td>
@@ -184,7 +201,7 @@ ul.risks{margin:8px 0 0;padding-left:20px;color:var(--muted)}ul.risks li{margin-
 <tr>
 <td class="num">B8</td>
 <td>
-  <div class="step">Include image flag <span style="color:var(--warn)">— column already exists</span></div>
+  <div class="step">Include image flag <span style="color:var(--ok)">— DONE, see above</span></div>
   <div style="margin-top:6px;font-size:12px;color:var(--muted)"><b>No new column needed.</b> <code>QuotationItem.includepic</code> already maps <code>includepic TINYINT</code>, and <code>QuotePdfService</code> already honors it when rendering. Adding a second <code>quotation_lines.include_image</code> column would split the same fact across two places. <b>Real work:</b> expose <code>PATCH /api/v1/quotations/{id}/items/{itemId}/include-image</code> body <code>{include: bool}</code> writing that existing column, and surface it on <code>QuotationItemResponse</code> so the Item Info drawer can render the checkbox in its saved state.</div>
 </td>
 <td class="detail"><code>Orders::saveincludepic</code></td>
@@ -330,6 +347,12 @@ ul.risks{margin:8px 0 0;padding-left:20px;color:var(--muted)}ul.risks li{margin-
 <td><span class="badge missing">NOT WRITTEN</span></td>
 </tr>
 </table></div>
+
+<h2>Deliberate divergences from legacy</h2>
+<p class="lede">Places where the new stack knowingly does <b>not</b> copy legacy DQS. Each one is a decision, not an oversight — recorded so it is not "corrected" back later.</p>
+<ul class="risks">
+<li><b>Country store-ID ranges are inclusive.</b> Legacy tests Colombia as <code>6100 &lt; storeId &amp;&amp; storeId &lt; 6199</code> (<code>views/orders/edit.php</code> ~line 565), excluding both ends, so clubs 6100 and 6199 fall through to the generic branch there. <code>util/ClubCapabilities.java</code> uses inclusive bounds, which is the correct behavior — the legacy comparison is an off-by-one. <b>Confirmed with the PO.</b> Not cosmetic: the range drives the tax treatment and which totals variant the quote renders. The frontend mirrors the same bounds in <code>src/constants/quotation.ts</code>; keep the two in step.</li>
+</ul>
 
 <h2>Coordination rules</h2>
 <div class="coord-grid">
