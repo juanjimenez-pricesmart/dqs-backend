@@ -73,6 +73,23 @@ public class QuotationFiscal {
     @Column(name = "neighborhood_code", length = 20)
     private String neighborhoodCode;
 
+    /**
+     * A tax invoice was requested — Trinidad, Jamaica, Barbados.
+     *
+     * Boolean because TINYINT(1) reaches the driver as BIT; the API keeps
+     * carrying it as 0/1, like documentValidated above.
+     */
+    @Column(name = "generate_fiscal", nullable = false)
+    private Boolean generateFiscal;
+
+    /**
+     * Costa Rica's anonymous electronic ticket. When it is on, the whole
+     * identification block is hidden and cleared: a ticket has no holder, and
+     * leaving those fields filled would submit data the operator opted out of.
+     */
+    @Column(name = "generate_tiquete_electronico", nullable = false)
+    private Boolean generateTiqueteElectronico;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private java.time.Instant createdAt;
 

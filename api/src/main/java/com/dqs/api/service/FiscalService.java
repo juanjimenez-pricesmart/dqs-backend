@@ -97,6 +97,8 @@ public class FiscalService {
         fiscal.setCityCode(str(data.get("city_code")));
         fiscal.setZoneCode(str(data.get("zone_code")));
         fiscal.setNeighborhoodCode(str(data.get("neighborhood_code")));
+        fiscal.setGenerateFiscal(toBool(data.get("generate_fiscal")));
+        fiscal.setGenerateTiqueteElectronico(toBool(data.get("generate_tiquete_electronico")));
 
         fiscalRepository.save(fiscal);
         upsertCatalogs(data);
@@ -187,6 +189,9 @@ public class FiscalService {
             m.put("city_code",              f.getCityCode());
             m.put("zone_code",              f.getZoneCode());
             m.put("neighborhood_code",      f.getNeighborhoodCode());
+            m.put("generate_fiscal",        Boolean.TRUE.equals(f.getGenerateFiscal()) ? 1 : 0);
+            m.put("generate_tiquete_electronico",
+                                            Boolean.TRUE.equals(f.getGenerateTiqueteElectronico()) ? 1 : 0);
             m.put("created_at",             f.getCreatedAt() != null ? f.getCreatedAt().toString() : null);
             m.put("updated_at",             f.getUpdatedAt() != null ? f.getUpdatedAt().toString() : null);
 
