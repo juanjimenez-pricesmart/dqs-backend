@@ -42,6 +42,23 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * An upstream failure is not our fault, and a 404 from the Business API is
+     * not a server error. Mapping these through the catch-all below reported a
+     * missing membership as "Internal server error".
+     */
+    @ExceptionHandler(BusinessApiException.class)
+    public ResponseEntity<Map<String, String>> handleBusinessApi(BusinessApiException ex) {
+        if (ex.getStatus() == HttpStatus.NOT_FOUND.value()) {
+            log.warn("[GlobalExceptionHandler] Business API 404 on {}", ex.getPath());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "No encontrado en el Business API"));
+        }
+        log.error("[GlobalExceptionHandler] Business API {} on {}", ex.getStatus(), ex.getPath());
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(Map.of("error", "Business API respondió " + ex.getStatus()));
+    }
+
+    /**
      * An unmapped path is a 404, not a server fault. Without this, the
      * catch-all below swallows NoResourceFoundException and reports every
      * typo in a URL as "Internal server error".
