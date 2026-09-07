@@ -198,9 +198,14 @@ public class QuotationService {
     }
 
     /**
-     * Updates a line's quantity and/or its exemption percentage. Both keys are
-     * optional, so the Editar Item modal can send them together in one call
-     * the way legacy's orders/saveitemqty does.
+     * Updates one line: quantity, exemption percentage, per-item comment and
+     * the print-image flag. Every key is optional, so a caller sends only what
+     * it changed.
+     *
+     * Legacy spreads this across three endpoints — orders/saveitemqty,
+     * orders/savecomment and orders/saveincludepic — each re-reading and
+     * re-writing the same row. One endpoint for one row keeps the recompute
+     * rules in a single place.
      */
     @Transactional
     public QuotationItemResponse updateItem(Long quotationId, Long itemId, java.util.Map<String, Object> body) {
@@ -224,6 +229,20 @@ public class QuotationService {
                 ? new BigDecimal(body.get("exemp").toString())
                 : (item.getTaxes() != null ? coalesce(item.getTaxes().getExcentPorcentaje(), BigDecimal.ZERO) : BigDecimal.ZERO);
         applyExemption(item, pct);
+
+        // Item Info drawer: the per-item comment and the "include image in the
+        // quote" flag. Both columns already existed and were read-only.
+        if (body.get("icomments") != null) {
+            String comment = body.get("icomments").toString();
+            // orders_item.icomments is VARCHAR(500); truncate rather than let
+            // the driver reject the write.
+            item.setIcomments(comment.length() > 500 ? comment.substring(0, 500) : comment);
+        }
+        if (body.get("includepic") != null) {
+            Object raw = body.get("includepic");
+            boolean include = raw instanceof Boolean b ? b : !"0".equals(raw.toString()) && !"false".equalsIgnoreCase(raw.toString());
+            item.setIncludepic(include ? 1 : 0);
+        }
 
         return toItemResponse(quotationItemRepository.save(item));
     }
