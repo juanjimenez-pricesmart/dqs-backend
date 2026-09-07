@@ -151,12 +151,50 @@ field.
 type — 314 country rows become 99 distinct types. Check the list before running
 if a name was ever used to mean two different things.
 
+## Connecting the application
+
+The second datasource exists. It is **off by default** — with
+`azure.datasource.enabled=false` no connection is opened, no catalog repository
+bean is created, and the application runs entirely against MySQL exactly as
+before. Developer machines and any environment not yet cut over keep working,
+and a wrong connection string cannot take down an environment that was not
+using it.
+
+    AZURE_DB_ENABLED=true
+    AZURE_DB_URL=jdbc:sqlserver://<server>.database.windows.net:1433;databaseName=quotecenter;encrypt=true
+    AZURE_DB_USERNAME=...
+    AZURE_DB_PASSWORD=...
+
+With it on, `GET /api/v1/diag/catalog` reports a row count per table and
+`/api/v1/diag/catalog/country/CR` resolves a country with its current rate,
+payment methods and document types. Those endpoints exist for exactly this: the
+catalogs have no consumer yet, so without them nothing would notice a broken
+connection until the day something is switched over.
+
+### Trying it locally, without an Azure instance
+
+SQL Server in Docker is close enough to Azure SQL for this schema:
+
+    docker run -d --name dqs-mssql --platform linux/amd64 \
+      -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD='<password>' -e MSSQL_PID=Developer \
+      -p 11433:1433 mcr.microsoft.com/mssql/server:2022-latest
+
+    docker exec dqs-mssql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '<password>' -C \
+      -Q "CREATE DATABASE quotecenter"
+    # then copy in and run 01, 02, 03 (and 04 if you want the rates)
+
+    AZURE_DB_URL=jdbc:sqlserver://localhost:11433;databaseName=quotecenter;encrypt=true;trustServerCertificate=true
+
+`trustServerCertificate=true` is for the container's self-signed certificate.
+Never set it against a real Azure instance.
+
 ## What still reads the legacy database
 
-This is schema and data only. The application code has not been switched over —
-it still reads `ps_tienda`, `ps_rutas`, `ps_fel` and the rest through
-`NativeQueries`, because there is no Azure connection configured yet. Switching
-it needs the instance, credentials and a second datasource.
+**The services have not been switched over.** They still read `ps_tienda`,
+`ps_rutas`, `ps_fel`, `orders_pago` and `ps_tasa_cambio` through
+`NativeQueries` against MySQL. The Azure side is wired and proven but has no
+consumer, which is why the flag defaults to off and nothing injects a catalog
+repository outside the diagnostics controller.
 
 Two queries join a legacy table to a QuoteCenter table and cannot simply be
 repointed, since the two will live in different databases:
@@ -164,7 +202,9 @@ repointed, since the two will live in different databases:
 - `DeliveryLogRepository` — `ps_delivery_log_cargue` with `quotation_delivery`
 - `PriceSmartPaymentService` — `ps_tienda` with `quotations` / `quotation_customers`
 
-Both need composing in the service instead of in SQL.
+Both need composing in the service instead of in SQL — the two databases cannot
+be joined, and no relationship may be declared between a catalog entity and one
+in `com.dqs.api.model`.
 
 Members (`ps_socios`, `ps_socios_dqs20`) are deliberately **not** here. They are
 live data, not a catalog, and there is already a Business API for membership
@@ -180,9 +220,15 @@ forces:
 | `AUTO_INCREMENT` | `IDENTITY(1,1)` |
 | `TINYINT(1)` | `BIT` |
 | `ENUM(...)` | `NVARCHAR` + `CHECK` |
-| `TIMESTAMP ... ON UPDATE CURRENT_TIMESTAMP` | `DATETIME2(3)` + an `AFTER UPDATE` trigger |
+| `TIMESTAMP ... ON UPDATE CURRENT_TIMESTAMP` | `DATETIMEOFFSET(3)` + an `AFTER UPDATE` trigger |
 | `VARCHAR` | `NVARCHAR` — names carry accents |
 | inline `COMMENT` | `--` comments |
+
+Timestamps are `DATETIMEOFFSET`, not `DATETIME2`: they are written with
+`SYSUTCDATETIME()` so the offset is `+00:00`, and the entities map them to
+`java.time.Instant`, which Hibernate's SQL Server dialect will only accept
+against `DATETIMEOFFSET`. A `DATETIME2` column fails schema validation at
+startup — which is how this was found.
 
 `ON UPDATE CURRENT_TIMESTAMP` has no declarative equivalent, so each table with
 an `updated_at` gets a small trigger. The alternative — letting Hibernate write
