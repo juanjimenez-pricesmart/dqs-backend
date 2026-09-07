@@ -331,6 +331,12 @@ ul.risks{margin:8px 0 0;padding-left:20px;color:var(--muted)}ul.risks li{margin-
 </tr>
 </table></div>
 
+<h2>Deliberate divergences from legacy</h2>
+<p class="lede">Places where the new stack knowingly does <b>not</b> copy legacy DQS. Each one is a decision, not an oversight — recorded so it is not "corrected" back later.</p>
+<ul class="risks">
+<li><b>Country store-ID ranges are inclusive.</b> Legacy tests Colombia as <code>6100 &lt; storeId &amp;&amp; storeId &lt; 6199</code> (<code>views/orders/edit.php</code> ~line 565), excluding both ends, so clubs 6100 and 6199 fall through to the generic branch there. <code>util/ClubCapabilities.java</code> uses inclusive bounds, which is the correct behavior — the legacy comparison is an off-by-one. <b>Confirmed with the PO.</b> Not cosmetic: the range drives the tax treatment and which totals variant the quote renders. The frontend mirrors the same bounds in <code>src/constants/quotation.ts</code>; keep the two in step.</li>
+</ul>
+
 <h2>Coordination rules</h2>
 <div class="coord-grid">
   <div class="coord-card">
