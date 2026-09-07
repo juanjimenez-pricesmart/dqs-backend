@@ -44,6 +44,11 @@ public class DeliveryController {
     // ── quotation_delivery ────────────────────────────────────────────────────
 
     @Operation(summary = "Guardar datos de delivery para una cotización")
+    @GetMapping("/last-address")
+    public ResponseEntity<Map<String, Object>> getLastAddress(@RequestParam String membership) {
+        return ResponseEntity.ok(Map.of("address", deliveryService.getLastDeliveryAddress(membership)));
+    }
+
     @PostMapping
     public ResponseEntity<Map<String, Object>> save(@RequestBody Map<String, Object> body) {
         log.info("[DeliveryController] POST / quotationId={}", body.get("quotation_id"));
