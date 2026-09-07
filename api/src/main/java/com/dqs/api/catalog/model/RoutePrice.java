@@ -35,6 +35,18 @@ public class RoutePrice {
     @Column(name = "price_usd", nullable = false, precision = 15, scale = 4)
     private BigDecimal priceUsd;
 
+    /**
+     * Smallest billable quantity at this tier, or null when there is none.
+     *
+     * The legacy `pallet_required` / `halfpallet_required` columns. The 3NF
+     * draft had turned them into booleans on the route, which would have thrown
+     * the numbers away — they are counts (4 full pallets, 15 half) and the
+     * delivery panel prints them. They belong to the tier, which is also why the
+     * quarter-pallet tier has none.
+     */
+    @Column(name = "minimum_quantity")
+    private Integer minimumQuantity;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private Instant createdAt;
 

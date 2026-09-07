@@ -116,8 +116,6 @@ CREATE TABLE dbo.routes (
     route_type_id        INT            NULL,
     name                 NVARCHAR(200)  NOT NULL,
     truck_size           DECIMAL(10,2)  NOT NULL CONSTRAINT DF_routes_truck DEFAULT (0.00),
-    requires_full_pallet BIT            NOT NULL CONSTRAINT DF_routes_rfp DEFAULT (0),
-    requires_half_pallet BIT            NOT NULL CONSTRAINT DF_routes_rhp DEFAULT (0),
     is_active            BIT            NOT NULL CONSTRAINT DF_routes_active DEFAULT (1),
     created_at           DATETIMEOFFSET(3)   NOT NULL CONSTRAINT DF_routes_created DEFAULT (SYSUTCDATETIME()),
     updated_at           DATETIMEOFFSET(3)   NOT NULL CONSTRAINT DF_routes_updated DEFAULT (SYSUTCDATETIME()),
@@ -143,10 +141,17 @@ CREATE TABLE dbo.route_prices (
     unit_type   NVARCHAR(20)   NOT NULL,
     price_local DECIMAL(15,4)  NOT NULL CONSTRAINT DF_route_prices_local DEFAULT (0),
     price_usd   DECIMAL(15,4)  NOT NULL CONSTRAINT DF_route_prices_usd DEFAULT (0),
+    -- Smallest billable quantity at this tier. The legacy pallet_required and
+    -- halfpallet_required columns, which the 3NF draft had turned into booleans
+    -- on the route — they are counts, not flags: 4 full pallets, 15 half. The
+    -- delivery panel prints the number. It belongs to the tier, not the route,
+    -- which is also why the quarter-pallet tier simply has none.
+    minimum_quantity INT       NULL,
     created_at  DATETIMEOFFSET(3)   NOT NULL CONSTRAINT DF_route_prices_created DEFAULT (SYSUTCDATETIME()),
     updated_at  DATETIMEOFFSET(3)   NOT NULL CONSTRAINT DF_route_prices_updated DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT PK_route_prices           PRIMARY KEY (id),
     CONSTRAINT UQ_route_prices_route_unit UNIQUE (route_id, unit_type),
+    CONSTRAINT CK_route_prices_minimum    CHECK (minimum_quantity IS NULL OR minimum_quantity > 0),
     CONSTRAINT CK_route_prices_unit_type CHECK (unit_type IN (N'TRIP', N'FULL_PALLET', N'HALF_PALLET', N'QUARTER_PALLET')),
     CONSTRAINT FK_route_prices_route     FOREIGN KEY (route_id) REFERENCES dbo.routes (id) ON DELETE CASCADE
 );

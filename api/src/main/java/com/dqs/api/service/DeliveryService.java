@@ -7,7 +7,8 @@ import com.dqs.api.model.QuotationItem;
 import com.dqs.api.repository.QuotationDeliveryRepository;
 import com.dqs.api.repository.QuotationItemRepository;
 import com.dqs.api.repository.QuotationRepository;
-import com.dqs.api.repository.support.NativeQueries;
+import com.dqs.api.catalog.source.CatalogSource;
+import com.dqs.api.catalog.source.RouteInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,12 +26,9 @@ import java.util.Map;
 /**
  * Delivery details of a quotation, and the 888905 line that carries its charge.
  *
- * `quotation_delivery` is ours and is mapped as an entity. The route catalog is
- * read through a native query instead: `ps_rutas` and `ps_tipos_ruta` belong to
- * the legacy application, and an @Entity over a table we do not own would put
- * it under `ddl-auto=validate` — a column rename on their side would stop the
- * whole backend from starting. Native SQL keeps that blast radius at one query
- * while still going through the EntityManager. See repository/CLAUDE.md.
+ * `quotation_delivery` is ours and is mapped as an entity. The route catalog
+ * comes from CatalogSource, which reads either the legacy `ps_rutas` or our own
+ * Azure tables depending on configuration — this service does not know which.
  *
  * The public shape of this service is unchanged: Maps in, Maps out, snake_case
  * keys matching the column names the frontend already reads.
@@ -52,7 +50,7 @@ public class DeliveryService {
 
     private final BusinessApiClient businessApiClient;
     private final ObjectMapper objectMapper;
-    private final NativeQueries nativeQueries;
+    private final CatalogSource catalogSource;
     private final QuotationService quotationService;
     private final QuotationDeliveryRepository deliveryRepository;
     private final QuotationRepository quotationRepository;
@@ -129,32 +127,17 @@ public class DeliveryService {
         return true;
     }
 
-    // ── Routes for a store — legacy catalog, native query, no entity ─────────
+    // ── Routes for a store ────────────────────────────────────────────────────
 
     /**
      * Routes for a club, with the tariffs the "Costo por ruta" panel shows.
      *
-     * Legacy fetches those separately, one request per route selection
-     * (orders/getrouteinfo → Model_orders::getrutaid). They come from the same
-     * ps_rutas row the list already reads, so they ride along here instead:
-     * the panel is informational and the extra round trip bought nothing.
-     *
-     * The tariff columns are legacy's own names — `14pallet_local` starts with
-     * a digit and has to be quoted.
+     * Which database answers depends on azure.datasource.enabled; both return
+     * the same shape. See CatalogSource.
      */
-    public List<Map<String, Object>> getRoutes(Integer storeId) {
+    public List<RouteInfo> getRoutes(Integer storeId) {
         log.info("[DeliveryService] getRoutes storeId={}", storeId);
-        return nativeQueries.list(
-            "SELECT A.llave AS id, A.descripcion AS name, A.truck_size AS truckSize, " +
-            "A.pallet_local AS palletRate, A.pallet_required AS palletMinimum, " +
-            "A.halfpallet_local AS halfPalletRate, A.halfpallet_required AS halfPalletMinimum, " +
-            "A.`14pallet_local` AS quarterPalletRate, A.`14pallet_usd` AS quarterPalletRateUsd, " +
-            "TR.nombre AS routeTypeName, TR.codigo AS routeTypeCode " +
-            "FROM ps_rutas A " +
-            "LEFT JOIN ps_tipos_ruta TR ON A.tipo_ruta_id = TR.id AND TR.status = 'A' " +
-            "WHERE A.ps_tienda_id = ?1 AND A.status = 'A' " +
-            "ORDER BY A.llave",
-            storeId);
+        return catalogSource.routesOfClub(storeId);
     }
 
     // ── Read ──────────────────────────────────────────────────────────────────

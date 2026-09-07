@@ -171,6 +171,33 @@ payment methods and document types. Those endpoints exist for exactly this: the
 catalogs have no consumer yet, so without them nothing would notice a broken
 connection until the day something is switched over.
 
+### The instance
+
+Created 2026-09-07, subscription `psmt-b2b-online-dev`, resource group
+`rg-b2b-shared-dev`:
+
+    server    sql-b2b-quotecenter-eastus-dev.database.windows.net   (eastus)
+    database  quotecenter   Basic, 2 GB
+    login     qcadmin       password in api/.env.local, which is gitignored
+
+Its own server rather than a database on `sql-b2b-online-eastus-dev`, which is
+shared with other teams: connecting there would have meant either their
+`sqladmin` password or making ourselves Entra admin over everyone's databases.
+A logical server costs nothing on its own — the charge is per database.
+
+Firewall rules: `claude-code-runner` and `AllowAzureServices`. Add your own IP
+before connecting; there is no blanket rule.
+
+**Do not `source` `.env.local` before starting the application.** Spring reads
+it directly. A shell cuts `AZURE_DB_URL` at its first `;`, leaving host and port
+only, so the driver connects to `master` and every table looks missing at
+startup — which is exactly how the first run failed.
+
+Exchange-rate history is **not loaded**. `sqlcmd` sends `04` as a single 2 MB
+batch and a Basic-tier database chews on it for a long time; nothing reads the
+table and it is not wired into `CatalogSource`, so it was skipped. The file is
+idempotent whenever it is wanted.
+
 ### Trying it locally, without an Azure instance
 
 SQL Server in Docker is close enough to Azure SQL for this schema:
@@ -188,13 +215,31 @@ SQL Server in Docker is close enough to Azure SQL for this schema:
 `trustServerCertificate=true` is for the container's self-signed certificate.
 Never set it against a real Azure instance.
 
-## What still reads the legacy database
+## Switching a catalog over
 
-**The services have not been switched over.** They still read `ps_tienda`,
-`ps_rutas`, `ps_fel`, `orders_pago` and `ps_tasa_cambio` through
-`NativeQueries` against MySQL. The Azure side is wired and proven but has no
-consumer, which is why the flag defaults to off and nothing injects a catalog
-repository outside the diagnostics controller.
+Three catalogs go through `CatalogSource`, an interface with two
+implementations picked by the same flag: `LegacyCatalogSource` reads the old
+tables, `AzureCatalogSource` reads ours. Exactly one bean exists, the services
+cannot tell which, and moving an environment across is a configuration change
+rather than a deployment — reversible if something turns out to be wrong.
+
+| Catalog | Legacy | Ours | Endpoint |
+|---|---|---|---|
+| Routes and tariffs | `ps_rutas`, `ps_tipos_ruta` | `routes`, `route_prices`, `route_types` | `/api/v1/deliveries/routes` |
+| Fiscal document types | `ps_fel` | `fiscal_document_types` | `/api/v1/fiscal/catalog/doc-types` |
+| Payment methods | `orders_pago` | `country_payment_methods` | `/api/v1/payments/methods` |
+
+Both sides were captured and diffed. Routes and document types come back
+**byte-identical**. Payment methods match on every description and tender key in
+the same order; only the row `id` differs, which is a React key and is not
+persisted — `quotation_payment.payment_method_id` stores the tender key.
+
+**Clubs and exchange rates are deliberately not in `CatalogSource` yet.** They
+feed the OMS payload context, which carries `impuesto_operacion`, and what that
+means for the three countries whose legacy value is empty is still open — see
+above. Switching them first would take a decision nobody has taken.
+
+`ps_delivery_log_cargue` and the two cross-database queries stay where they are.
 
 Two queries join a legacy table to a QuoteCenter table and cannot simply be
 repointed, since the two will live in different databases:
