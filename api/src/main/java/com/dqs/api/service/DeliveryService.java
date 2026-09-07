@@ -19,7 +19,12 @@ import java.util.Map;
 public class DeliveryService {
 
     // Product ID that represents a delivery charge in the quotation items list
-    public static final String DELIVERY_PRODUCT_ID = "888905";
+    /**
+     * Kept as an alias so existing callers keep compiling; the code itself now
+     * lives in the SpecialItems registry, next to the traits that explain why
+     * this line is treated differently.
+     */
+    public static final String DELIVERY_PRODUCT_ID = com.dqs.api.util.SpecialItems.DELIVERY;
 
     private final BusinessApiClient businessApiClient;
     private final ObjectMapper objectMapper;

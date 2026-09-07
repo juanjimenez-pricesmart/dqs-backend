@@ -1,5 +1,6 @@
 package com.dqs.api.client;
 
+import com.dqs.api.exception.BusinessApiException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,17 +44,23 @@ public class BusinessApiClient {
 
     public String get(String path) {
         String token = acquireToken();
-        String url = businessBaseUrl + path + "?access_token=" + token;
-        log.info("[BusinessApiClient] GET {}", url);
+        String url = buildUrl(path, token);
+        // Never log `url`: the access token is a query parameter on it.
+        log.info("[BusinessApiClient] GET {}", path);
         try {
             HttpURLConnection conn = openConnection(url, "GET");
             conn.setRequestProperty("Accept", "application/json");
             int status = conn.getResponseCode();
-            InputStream is = status < 400 ? conn.getInputStream() : conn.getErrorStream();
-            String body = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            String body = readBody(conn, status);
             conn.disconnect();
             log.debug("[BusinessApiClient] GET {} → {} {}", path, status, body);
+            if (status >= 400) {
+                throw new BusinessApiException(status, path, body);
+            }
             return body;
+        } catch (BusinessApiException e) {
+            log.warn("[BusinessApiClient] GET {} → {}", path, e.getStatus());
+            throw e;
         } catch (Exception e) {
             log.error("[BusinessApiClient] GET {} failed: {}", path, e.getMessage());
             throw new RuntimeException("Business API error: " + e.getMessage());
@@ -62,8 +69,9 @@ public class BusinessApiClient {
 
     public String post(String path, Object payload) {
         String token = acquireToken();
-        String url = businessBaseUrl + path + "?access_token=" + token;
-        log.info("[BusinessApiClient] POST {}", url);
+        String url = buildUrl(path, token);
+        // Never log `url`: the access token is a query parameter on it.
+        log.info("[BusinessApiClient] POST {}", path);
         try {
             String json = objectMapper.writeValueAsString(payload);
             HttpURLConnection conn = openConnection(url, "POST");
@@ -74,11 +82,16 @@ public class BusinessApiClient {
                 os.write(json.getBytes(StandardCharsets.UTF_8));
             }
             int status = conn.getResponseCode();
-            InputStream is = status < 400 ? conn.getInputStream() : conn.getErrorStream();
-            String body = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            String body = readBody(conn, status);
             conn.disconnect();
             log.debug("[BusinessApiClient] POST {} → {} {}", path, status, body);
+            if (status >= 400) {
+                throw new BusinessApiException(status, path, body);
+            }
             return body;
+        } catch (BusinessApiException e) {
+            log.warn("[BusinessApiClient] POST {} → {}", path, e.getStatus());
+            throw e;
         } catch (Exception e) {
             log.error("[BusinessApiClient] POST {} failed: {}", path, e.getMessage());
             throw new RuntimeException("Business API error: " + e.getMessage());
@@ -104,6 +117,39 @@ public class BusinessApiClient {
             log.error("[BusinessApiClient] Token acquisition failed: {}", e.getMessage());
             throw new RuntimeException("Error adquiriendo token: " + e.getMessage());
         }
+    }
+
+    /**
+     * Joins the configured base URL with a caller path, tolerating either form
+     * of base URL.
+     *
+     * Every caller writes paths the way legacy DQS does — `/api/membership/...`,
+     * `/api/getItemCode/...` — because legacy appends exactly that to its
+     * BUSINESS host, which carries no path. But MEMBERSHIP_BASE_URL is
+     * configured *with* the `/api` suffix already on it, so naive concatenation
+     * produced `/api/api/membership/validate/...` and every lookup 404'd.
+     * Normalising here fixes it for whichever form an environment is set to,
+     * instead of depending on each developer's .env.local being written a
+     * particular way — .env.local is not in the repository.
+     */
+    String buildUrl(String path, String token) {
+        String base = businessBaseUrl == null ? "" : businessBaseUrl.replaceAll("/+$", "");
+        String suffix = path == null ? "" : path;
+        if (base.endsWith("/api") && suffix.startsWith("/api/")) {
+            suffix = suffix.substring("/api".length());
+        }
+        return base + suffix + "?access_token=" + token;
+    }
+
+    /**
+     * Reads the response body. getErrorStream() returns null for some error
+     * responses, which previously threw a NullPointerException — surfacing an
+     * upstream 404 as "Internal server error" and hiding the real cause.
+     */
+    private String readBody(HttpURLConnection conn, int status) throws Exception {
+        InputStream is = status < 400 ? conn.getInputStream() : conn.getErrorStream();
+        if (is == null) return "";
+        return new String(is.readAllBytes(), StandardCharsets.UTF_8);
     }
 
     private HttpURLConnection openConnection(String url, String method) throws Exception {
