@@ -19,16 +19,16 @@ import java.util.Map;
 public class PaymentController {
 
     private final PriceSmartPaymentService paymentService;
-    private final com.dqs.api.repository.PaymentMethodRepository paymentMethodRepository;
+    private final com.dqs.api.catalog.source.CatalogSource catalogSource;
 
     @Operation(
         summary = "Métodos de pago por país",
-        description = "Lista los métodos de pago disponibles (orders_pago) para el ISO2 de país indicado"
+        description = "Métodos de pago disponibles para el ISO2 de país indicado. El origen (orders_pago del legacy, o country_payment_methods) depende de quotecenter.catalogs.own-tables"
     )
     @GetMapping("/methods")
-    public ResponseEntity<java.util.List<Map<String, Object>>> getMethods(@RequestParam String country) {
+    public ResponseEntity<java.util.List<com.dqs.api.catalog.source.PaymentMethodInfo>> getMethods(@RequestParam String country) {
         log.info("[PaymentController] GET /api/v1/payments/methods country={}", country);
-        return ResponseEntity.ok(paymentMethodRepository.findByCountry(country));
+        return ResponseEntity.ok(catalogSource.paymentMethodsOfCountry(country));
     }
 
     @Operation(
