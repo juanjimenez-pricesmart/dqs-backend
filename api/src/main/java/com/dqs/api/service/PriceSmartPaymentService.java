@@ -4,7 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.jdbc.core.JdbcTemplate;
+import com.dqs.api.model.QuotationPaymentAttempt;
+import com.dqs.api.repository.QuotationPaymentAttemptRepository;
+import com.dqs.api.repository.QuotationRepository;
+import com.dqs.api.repository.support.NativeQueries;
 import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
@@ -20,7 +23,9 @@ import javax.net.ssl.*;
 @RequiredArgsConstructor
 public class PriceSmartPaymentService {
 
-    private final JdbcTemplate jdbcTemplate;
+    private final NativeQueries nativeQueries;
+    private final QuotationPaymentAttemptRepository attemptRepository;
+    private final QuotationRepository quotationRepository;
     private final ObjectMapper objectMapper;
 
     @Value("${pricesmart.payments.base-url}")
@@ -50,7 +55,7 @@ public class PriceSmartPaymentService {
         log.info("[PriceSmartPaymentService] createPaymentRequest quotationId={}", quotationId);
 
         // Load quotation + customer + store
-        List<Map<String, Object>> quoteRows = jdbcTemplate.queryForList(
+        List<Map<String, Object>> quoteRows = nativeQueries.list(
             "SELECT q.id, qc.customer_membership, qc.customer_name, q.store_id, " +
             "       t.pais_iso2, t.nombre as store_nombre " +
             "FROM quotations q " +
@@ -69,7 +74,7 @@ public class PriceSmartPaymentService {
         Integer storeId      = ((Number) quote.get("store_id")).intValue();
 
         // Load items (description and category live in quotation_item_product)
-        List<Map<String, Object>> items = jdbcTemplate.queryForList(
+        List<Map<String, Object>> items = nativeQueries.list(
             "SELECT qi.product_id, qip.description, qi.qty, qi.rate, qip.category " +
             "FROM quotation_items qi " +
             "LEFT JOIN quotation_item_product qip ON qip.item_id = qi.id " +
@@ -155,11 +160,17 @@ public class PriceSmartPaymentService {
         // Always surface the invoiceId we sent so the frontend can use it for status checks
         result.putIfAbsent("invoice", invoiceId);
 
-        // Persist the attempt so we can correlate invoice → quotation later
-        jdbcTemplate.update(
-            "INSERT INTO quotation_payment_attempts (quotation_id, invoice_id, authorization_token) VALUES (?,?,?) " +
-            "ON DUPLICATE KEY UPDATE authorization_token = VALUES(authorization_token)",
-            quotationId, invoiceId, authToken != null ? authToken.toString() : null);
+        // Persist the attempt so we can correlate invoice → quotation later.
+        // invoice_id is unique, so a retry under the same invoice refreshes the
+        // token instead of adding a second row — what the ON DUPLICATE KEY
+        // clause did before.
+        QuotationPaymentAttempt attemptRow = attemptRepository.findByInvoiceId(invoiceId)
+            .orElseGet(() -> QuotationPaymentAttempt.builder()
+                .quotation(quotationRepository.getReferenceById(quotationId))
+                .invoiceId(invoiceId)
+                .build());
+        attemptRow.setAuthorizationToken(authToken != null ? authToken.toString() : null);
+        attemptRepository.save(attemptRow);
 
         return result;
     }
@@ -260,16 +271,13 @@ public class PriceSmartPaymentService {
 
     /** Returns the next sequential attempt number (1-based) for a quotation. */
     private int getNextAttemptNumber(Long quotationId) {
-        Integer count = jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM quotation_payment_attempts WHERE quotation_id = ?",
-            Integer.class, quotationId);
-        return (count != null ? count : 0) + 1;
+        return (int) attemptRepository.countByQuotation_Id(quotationId) + 1;
     }
 
     private String resolveEmail(String membership, String customerName, Long quotationId) {
         if (membership != null && !membership.isBlank()) {
             try {
-                List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                List<Map<String, Object>> rows = nativeQueries.list(
                     "SELECT email FROM ps_socios WHERE membership = ? LIMIT 1", membership);
                 if (!rows.isEmpty() && rows.get(0).get("email") != null) {
                     return rows.get(0).get("email").toString();

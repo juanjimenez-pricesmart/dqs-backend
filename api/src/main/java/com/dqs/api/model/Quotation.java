@@ -34,6 +34,15 @@ public class Quotation {
     @Column(name = "dexpired")
     private LocalDate dexpired;
 
+    /**
+     * Why the quotation was closed without a sale — a QuotationCancelReason id.
+     *
+     * Held as a plain id rather than an association: it is set once, at close
+     * time, and every read of it goes through the reasons catalog anyway.
+     */
+    @Column(name = "cancel_reason_id")
+    private Integer cancelReasonId;
+
     @OneToOne(mappedBy = "quotation", cascade = CascadeType.ALL, orphanRemoval = true)
     private QuotationCustomer customer;
 

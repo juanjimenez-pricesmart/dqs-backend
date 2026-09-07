@@ -1,24 +1,45 @@
 package com.dqs.api.service;
 
 import com.dqs.api.client.BusinessApiClient;
-
 import com.dqs.api.dto.QuotationItemRequest;
+import com.dqs.api.model.QuotationDelivery;
+import com.dqs.api.model.QuotationItem;
+import com.dqs.api.repository.QuotationDeliveryRepository;
+import com.dqs.api.repository.QuotationItemRepository;
+import com.dqs.api.repository.QuotationRepository;
+import com.dqs.api.repository.support.NativeQueries;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Delivery details of a quotation, and the 888905 line that carries its charge.
+ *
+ * `quotation_delivery` is ours and is mapped as an entity. The route catalog is
+ * read through a native query instead: `ps_rutas` and `ps_tipos_ruta` belong to
+ * the legacy application, and an @Entity over a table we do not own would put
+ * it under `ddl-auto=validate` — a column rename on their side would stop the
+ * whole backend from starting. Native SQL keeps that blast radius at one query
+ * while still going through the EntityManager. See repository/CLAUDE.md.
+ *
+ * The public shape of this service is unchanged: Maps in, Maps out, snake_case
+ * keys matching the column names the frontend already reads.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class DeliveryService {
 
-    // Product ID that represents a delivery charge in the quotation items list
     /**
      * Kept as an alias so existing callers keep compiling; the code itself now
      * lives in the SpecialItems registry, next to the traits that explain why
@@ -26,10 +47,16 @@ public class DeliveryService {
      */
     public static final String DELIVERY_PRODUCT_ID = com.dqs.api.util.SpecialItems.DELIVERY;
 
+    /** Quotation status for a completed sale. */
+    private static final int STATUS_SOLD = 3;
+
     private final BusinessApiClient businessApiClient;
     private final ObjectMapper objectMapper;
-    private final JdbcTemplate jdbcTemplate;
+    private final NativeQueries nativeQueries;
     private final QuotationService quotationService;
+    private final QuotationDeliveryRepository deliveryRepository;
+    private final QuotationRepository quotationRepository;
+    private final QuotationItemRepository itemRepository;
 
     // ── Business API: delivery windows ────────────────────────────────────────
 
@@ -50,77 +77,59 @@ public class DeliveryService {
     }
 
     // ── Save delivery — owns the full lifecycle ───────────────────────────────
-    // 1. Upserts quotation_delivery metadata
-    // 2. Upserts the 888905 line item in quotation_items (qty=1, rate=amount, tax-exempt)
+    // 1. Upserts the quotation_delivery row
+    // 2. Upserts the 888905 line item in quotation_items (rate = sign_price, tax-exempt)
 
+    @Transactional
     public boolean saveDelivery(Map<String, Object> data) {
         Long quotationId = toLong(data.get("quotation_id"));
         log.info("[DeliveryService] saveDelivery quotationId={}", quotationId);
 
-        try {
-            // Resolve qty and sign_price — frontend sends these; amount is computed here
-            BigDecimal qty       = data.get("qty")        != null ? new BigDecimal(data.get("qty").toString())        : BigDecimal.ONE;
-            BigDecimal signPrice = data.get("sign_price") != null ? new BigDecimal(data.get("sign_price").toString()) : BigDecimal.ZERO;
-            BigDecimal amount    = qty.multiply(signPrice);
+        // The client sends qty and sign_price; amount is always derived here
+        // so a client cannot store a total that disagrees with its parts.
+        BigDecimal qty       = toDecimal(data.get("qty"),        BigDecimal.ONE);
+        BigDecimal signPrice = toDecimal(data.get("sign_price"), BigDecimal.ZERO);
+        BigDecimal amount    = qty.multiply(signPrice);
 
-            log.info("[DeliveryService] saveDelivery qty={} signPrice={} amount={}", qty, signPrice, amount);
+        log.info("[DeliveryService] saveDelivery qty={} signPrice={} amount={}", qty, signPrice, amount);
 
-            // 1. Upsert delivery metadata
-            Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM quotation_delivery WHERE quotation_id = ?",
-                Integer.class, quotationId);
+        QuotationDelivery delivery = deliveryRepository.findByQuotation_Id(quotationId)
+            .orElseGet(() -> QuotationDelivery.builder()
+                .quotation(quotationRepository.getReferenceById(quotationId))
+                .build());
 
-            BigDecimal pallets = data.get("pallets") != null
-                ? new BigDecimal(data.get("pallets").toString()) : null;
-            String routeId   = data.get("route_id")   != null ? data.get("route_id").toString()   : null;
-            String routeName = data.get("route_name") != null ? data.get("route_name").toString() : null;
+        delivery.setQty(qty);
+        delivery.setSignPrice(signPrice);
+        delivery.setAmount(amount);
+        delivery.setAddress(toStringOrNull(data.get("address")));
+        delivery.setDeliveryDate(toLocalDate(data.get("delivery_date")));
+        delivery.setHourFrom(toInteger(data.get("hour_from")));
+        delivery.setHourTo(toInteger(data.get("hour_to")));
+        delivery.setRing(toStringOrNull(data.get("ring")));
+        delivery.setBox(toStringOrNull(data.get("box")));
+        delivery.setRouteId(toStringOrNull(data.get("route_id")));
+        delivery.setRouteName(toStringOrNull(data.get("route_name")));
+        delivery.setPallets(toDecimal(data.get("pallets"), null));
 
-            if (count != null && count > 0) {
-                jdbcTemplate.update(
-                    "UPDATE quotation_delivery SET " +
-                    "  qty = ?, sign_price = ?, amount = ?, address = ?, delivery_date = ?, " +
-                    "  hour_from = ?, hour_to = ?, ring = ?, box = ?, route_id = ?, route_name = ?, pallets = ? " +
-                    "WHERE quotation_id = ?",
-                    qty, signPrice, amount,
-                    data.get("address"), data.get("delivery_date"),
-                    data.get("hour_from"), data.get("hour_to"),
-                    data.get("ring"), data.get("box"), routeId, routeName, pallets,
-                    quotationId);
-            } else {
-                jdbcTemplate.update(
-                    "INSERT INTO quotation_delivery " +
-                    "  (quotation_id, qty, sign_price, amount, address, delivery_date, hour_from, hour_to, ring, box, route_id, route_name, pallets) " +
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    quotationId,
-                    qty, signPrice, amount,
-                    data.get("address"), data.get("delivery_date"),
-                    data.get("hour_from"), data.get("hour_to"),
-                    data.get("ring"), data.get("box"), routeId, routeName, pallets);
-            }
+        deliveryRepository.save(delivery);
 
-            // 2. Upsert 888905 line item — tax-exempt, rate = sign_price, qty = user qty
-            QuotationItemRequest itemReq = QuotationItemRequest.builder()
-                .productId(DELIVERY_PRODUCT_ID)
-                .description("Delivery")
-                .qty(qty)
-                .rate(signPrice)
-                .signPrice(signPrice)
-                .taxPorcentaje(BigDecimal.ZERO)
-                .taxFactor(BigDecimal.ZERO)
-                .taxIco(BigDecimal.ZERO)
-                .build();
-            quotationService.saveItem(quotationId, itemReq);
+        QuotationItemRequest itemReq = QuotationItemRequest.builder()
+            .productId(DELIVERY_PRODUCT_ID)
+            .description("Delivery")
+            .qty(qty)
+            .rate(signPrice)
+            .signPrice(signPrice)
+            .taxPorcentaje(BigDecimal.ZERO)
+            .taxFactor(BigDecimal.ZERO)
+            .taxIco(BigDecimal.ZERO)
+            .build();
+        quotationService.saveItem(quotationId, itemReq);
 
-            log.info("[DeliveryService] saveDelivery OK quotationId={} amount={}", quotationId, amount);
-            return true;
-
-        } catch (Exception e) {
-            log.error("[DeliveryService] Error saving delivery: {}", e.getMessage());
-            return false;
-        }
+        log.info("[DeliveryService] saveDelivery OK quotationId={} amount={}", quotationId, amount);
+        return true;
     }
 
-    // ── Routes for a store ────────────────────────────────────────────────────
+    // ── Routes for a store — legacy catalog, native query, no entity ─────────
 
     /**
      * Routes for a club, with the tariffs the "Costo por ruta" panel shows.
@@ -135,7 +144,7 @@ public class DeliveryService {
      */
     public List<Map<String, Object>> getRoutes(Integer storeId) {
         log.info("[DeliveryService] getRoutes storeId={}", storeId);
-        return jdbcTemplate.queryForList(
+        return nativeQueries.list(
             "SELECT A.llave AS id, A.descripcion AS name, A.truck_size AS truckSize, " +
             "A.pallet_local AS palletRate, A.pallet_required AS palletMinimum, " +
             "A.halfpallet_local AS halfPalletRate, A.halfpallet_required AS halfPalletMinimum, " +
@@ -143,73 +152,114 @@ public class DeliveryService {
             "TR.nombre AS routeTypeName, TR.codigo AS routeTypeCode " +
             "FROM ps_rutas A " +
             "LEFT JOIN ps_tipos_ruta TR ON A.tipo_ruta_id = TR.id AND TR.status = 'A' " +
-            "WHERE A.ps_tienda_id = ? AND A.status = 'A' " +
+            "WHERE A.ps_tienda_id = ?1 AND A.status = 'A' " +
             "ORDER BY A.llave",
             storeId);
     }
 
-    /**
-     * The address of the member's most recent delivery, to prefill the form.
-     *
-     * Legacy's query is Model_orders::getLastDeliveryAddress, and it orders
-     * `fecha_entrega ASC LIMIT 1` — which returns the OLDEST address, not the
-     * last one, despite the name. That reads as a typo rather than a decision:
-     * a member who moved would be offered an address they left years ago,
-     * forever. This orders DESC. Flip it if byte-parity matters more.
-     *
-     * Only sold quotations count (status 3), as legacy does.
-     */
+    // ── Read ──────────────────────────────────────────────────────────────────
+
+    /** The address of the member's most recent delivery, to prefill the form. */
+    @Transactional(readOnly = true)
     public String getLastDeliveryAddress(String membership) {
         log.info("[DeliveryService] getLastDeliveryAddress membership={}", membership);
-        List<String> found = jdbcTemplate.queryForList(
-            "SELECT d.address " +
-            "FROM quotations q " +
-            "JOIN quotation_customers c ON c.quotation_id = q.id " +
-            "JOIN quotation_delivery  d ON d.quotation_id = q.id " +
-            "WHERE c.customer_membership = ? AND q.status_id = 3 " +
-            "  AND d.address IS NOT NULL AND d.address <> '' " +
-            "ORDER BY d.delivery_date DESC LIMIT 1",
-            String.class, membership);
+        List<String> found = deliveryRepository.findAddressesByMembership(membership, PageRequest.of(0, 1));
         return found.isEmpty() ? "" : found.get(0);
     }
 
-    // ── Get delivery metadata ─────────────────────────────────────────────────
-
+    @Transactional(readOnly = true)
     public Map<String, Object> getDelivery(Long quotationId) {
         log.info("[DeliveryService] getDelivery quotationId={}", quotationId);
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-            "SELECT * FROM quotation_delivery WHERE quotation_id = ?", quotationId);
-        return rows.isEmpty() ? null : rows.get(0);
+        return deliveryRepository.findByQuotation_Id(quotationId).map(this::toMap).orElse(null);
     }
 
-    // ── Delete delivery — removes metadata + the 888905 line item ────────────
+    // ── Delete delivery — removes the row + the 888905 line item ─────────────
 
+    @Transactional
     public boolean deleteDelivery(Long quotationId) {
         log.info("[DeliveryService] deleteDelivery quotationId={}", quotationId);
-        try {
-            // Remove the 888905 line item from quotation_items
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT id FROM quotation_items WHERE quotation_id = ? AND product_id = ?",
-                quotationId, DELIVERY_PRODUCT_ID);
+        itemRepository.findAllByQuotation_IdAndProductId(quotationId, DELIVERY_PRODUCT_ID)
+            .stream().map(QuotationItem::getId).toList()
+            .forEach(itemId -> quotationService.deleteItem(quotationId, itemId));
 
-            for (Map<String, Object> row : rows) {
-                Long itemId = toLong(row.get("id"));
-                quotationService.deleteItem(quotationId, itemId);
-            }
-
-            // Remove delivery metadata
-            jdbcTemplate.update("DELETE FROM quotation_delivery WHERE quotation_id = ?", quotationId);
-
-            return true;
-        } catch (Exception e) {
-            log.error("[DeliveryService] Error deleting delivery: {}", e.getMessage());
-            return false;
-        }
+        deliveryRepository.deleteByQuotation_Id(quotationId);
+        return true;
     }
+
+    // ── Mapping ───────────────────────────────────────────────────────────────
+
+    /**
+     * The row as the API has always exposed it: snake_case keys named after the
+     * columns, because that is what the frontend reads (src/api/deliveries.ts).
+     * Moving to JPA changed the persistence layer, not the contract.
+     *
+     * Dates go out as ISO strings rather than as temporal objects so the shape
+     * does not depend on Jackson's date configuration — the frontend does
+     * `delivery_date.slice(0, 10)`, which needs a string.
+     */
+    private Map<String, Object> toMap(QuotationDelivery d) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id",            d.getId());
+        m.put("quotation_id",  d.getQuotation() != null ? d.getQuotation().getId() : null);
+        m.put("qty",           d.getQty());
+        m.put("sign_price",    d.getSignPrice());
+        m.put("amount",        d.getAmount());
+        m.put("address",       d.getAddress());
+        m.put("delivery_date", d.getDeliveryDate() != null ? d.getDeliveryDate().toString() : null);
+        m.put("hour_from",     d.getHourFrom());
+        m.put("hour_to",       d.getHourTo());
+        m.put("ring",          d.getRing());
+        m.put("box",           d.getBox());
+        m.put("route_id",      d.getRouteId());
+        m.put("route_name",    d.getRouteName());
+        m.put("pallets",       d.getPallets());
+        m.put("logcargueid",   d.getLogCargueId());
+        m.put("created_at",    d.getCreatedAt() != null ? d.getCreatedAt().toString() : null);
+        m.put("updated_at",    d.getUpdatedAt() != null ? d.getUpdatedAt().toString() : null);
+        return m;
+    }
+
+    // ── Coercion of the untyped request map ───────────────────────────────────
 
     private Long toLong(Object val) {
         if (val == null) return null;
-        if (val instanceof Number) return ((Number) val).longValue();
+        if (val instanceof Number n) return n.longValue();
         return Long.parseLong(val.toString());
+    }
+
+    private Integer toInteger(Object val) {
+        if (val == null) return null;
+        if (val instanceof Number n) return n.intValue();
+        String s = val.toString().trim();
+        return s.isEmpty() ? null : Integer.valueOf(s);
+    }
+
+    private BigDecimal toDecimal(Object val, BigDecimal fallback) {
+        if (val == null) return fallback;
+        String s = val.toString().trim();
+        return s.isEmpty() ? fallback : new BigDecimal(s);
+    }
+
+    private String toStringOrNull(Object val) {
+        if (val == null) return null;
+        String s = val.toString();
+        return s.isBlank() ? null : s;
+    }
+
+    /**
+     * Empty strings and MySQL's `0000-00-00` both mean "no date". The old raw
+     * INSERT let them through to the driver; a LocalDate column cannot, and a
+     * quote with a placeholder date is not worth failing a save over.
+     */
+    private LocalDate toLocalDate(Object val) {
+        if (val == null) return null;
+        String s = val.toString().trim();
+        if (s.isEmpty() || s.startsWith("0000-00-00")) return null;
+        try {
+            return LocalDate.parse(s.length() > 10 ? s.substring(0, 10) : s);
+        } catch (DateTimeParseException e) {
+            log.warn("[DeliveryService] Unparseable delivery_date '{}', stored as null", s);
+            return null;
+        }
     }
 }

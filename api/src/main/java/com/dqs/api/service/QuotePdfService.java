@@ -6,7 +6,7 @@ import com.dqs.api.util.ClubCapabilities;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.core.JdbcTemplate;
+import com.dqs.api.repository.support.NativeQueries;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
@@ -23,7 +23,7 @@ public class QuotePdfService {
     private final QuotationService quotationService;
     private final FiscalService    fiscalService;
     private final DeliveryService  deliveryService;
-    private final JdbcTemplate     jdbcTemplate;
+    private final NativeQueries   nativeQueries;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("MMM d, yyyy");
     private static final String[] FEL_COUNTRIES = {"SLV", "SV", "CR", "CRC"};
@@ -311,7 +311,7 @@ public class QuotePdfService {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private Map<String, Object> getStore(Integer storeId) {
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+        List<Map<String, Object>> rows = nativeQueries.list(
             "SELECT ps_tienda_id, nombre, pais_iso2, moneda FROM ps_tienda WHERE ps_tienda_id = ?", storeId);
         return rows.isEmpty() ? Map.of() : rows.get(0);
     }
