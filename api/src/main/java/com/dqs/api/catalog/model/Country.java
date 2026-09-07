@@ -3,14 +3,15 @@ package com.dqs.api.catalog.model;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 
 /**
  * A country QuoteCenter operates in. Parent of every other catalog.
  *
- * The legacy schema had no country table: these facts were repeated on every
- * ps_tienda row, or did not exist at all.
+ * The table predates this work — migration_quotecenter_schema.sql created it
+ * and seeded the thirteen countries — so the mapping follows what is there
+ * rather than what that file's fuller draft described. `code` already holds the
+ * ISO2 (CR, CO, GT…), which is why there is no separate iso2 column.
  */
 @Entity
 @Table(name = "countries")
@@ -21,16 +22,17 @@ public class Country {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @Column(name = "iso2", nullable = false, length = 2)
-    private String iso2;
-
-    @Column(name = "iso3", nullable = false, length = 3)
-    private String iso3;
+    /** ISO 3166-1 alpha-2. What every other catalog joins on. */
+    @Column(name = "code", nullable = false, length = 10)
+    private String code;
 
     @Column(name = "name", nullable = false, length = 100)
     private String name;
 
-    @Column(name = "currency_code", nullable = false, length = 3)
+    @Column(name = "country_name_full", length = 100)
+    private String fullName;
+
+    @Column(name = "currency_code", length = 10)
     private String currencyCode;
 
     @Column(name = "currency_symbol", length = 10)
@@ -46,39 +48,16 @@ public class Country {
     @Column(name = "tax_name", length = 20)
     private String taxName;
 
-    /** NIT, RUC, RTN — what the tax id is called here. */
-    @Column(name = "tax_id_label", length = 10)
-    private String taxIdLabel;
-
     /**
      * Whether stored line amounts already contain the tax.
      *
      * From the legacy ps_tienda.impuesto_operacion: '+' meant total = subtotal +
-     * tax (so amounts exclude it), anything else meant total = subtotal - tax.
-     * Read by the OMS payload builder — see azure/README.md, and the open
-     * question about the three countries whose legacy value was empty.
+     * tax, so amounts exclude it; anything else meant total = subtotal - tax.
+     * Read by the OMS payload builder. The three countries whose legacy value
+     * was empty are an open question — see the parity document.
      */
     @Column(name = "price_includes_tax", nullable = false)
     private Boolean priceIncludesTax;
-
-    @Column(name = "weight_unit", length = 10)
-    private String weightUnit;
-
-    @Column(name = "volume_unit", length = 10)
-    private String volumeUnit;
-
-    @Column(name = "min_quote_amount_usd", nullable = false, precision = 15, scale = 4)
-    private BigDecimal minQuoteAmountUsd;
-
-    /** Business-supplied authoritative value, not a conversion of the USD one. */
-    @Column(name = "min_quote_amount_local", precision = 15, scale = 4)
-    private BigDecimal minQuoteAmountLocal;
-
-    @Column(name = "transfer_notice_amount_usd", nullable = false, precision = 15, scale = 4)
-    private BigDecimal transferNoticeAmountUsd;
-
-    @Column(name = "transfer_notice_amount_local", precision = 15, scale = 4)
-    private BigDecimal transferNoticeAmountLocal;
 
     @Column(name = "is_active", nullable = false)
     private Boolean active;
@@ -86,7 +65,6 @@ public class Country {
     @Column(name = "created_at", insertable = false, updatable = false)
     private Instant createdAt;
 
-    /** Maintained by a database trigger; see azure/01_schema.sql. */
     @Column(name = "updated_at", insertable = false, updatable = false)
     private Instant updatedAt;
 }

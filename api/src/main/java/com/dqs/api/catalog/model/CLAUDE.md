@@ -1,17 +1,23 @@
-# Catalog entities (Azure SQL)
+# Catalog entities
 
-Tables QuoteCenter owns, in the Azure SQL database — countries, clubs, routes
-and tariffs, fiscal document types, payment methods, exchange rates. They
-replace what used to be read out of the legacy application's `ps_*` tables.
+Tables QuoteCenter owns that replace what used to be read out of the legacy
+application: clubs, routes and tariffs, fiscal document types, payment methods,
+exchange rates, and the countries they hang off.
 
-**This package must stay outside `com.dqs.api.model`.** Entity scanning is
-recursive, so a subpackage there would also be picked up by the MySQL
-persistence unit, which would try to validate these tables against MySQL and
-stop the application from starting.
+They live in the same database as everything else, in the same persistence unit,
+and are scanned by the ordinary Spring Boot autoconfiguration. The package is
+separate for the sake of the reader, not because of any wiring.
 
-Both persistence units run `ddl-auto=validate`, so a mapping that disagrees with
-`azure/01_schema.sql` fails at boot, not at the query. Change the two together.
+`ddl-auto=validate` is on, so a mapping that disagrees with
+`migration_quotecenter_catalogs.sql` stops the application from starting rather
+than failing at the query. Change the two together, and take the column list
+from `SHOW COLUMNS` — the migration files have drifted from the database before.
 
-Do not add a relationship between an entity here and one in `com.dqs.api.model`:
-they are in different databases and Hibernate cannot join them. Compose in the
-service instead.
+Two ids here are **persisted on quotations** and must never be regenerated:
+`FiscalDocumentType.id` is the legacy felid, stored in
+`quotation_fiscal.document_type`; `Route.code` is the legacy llave, stored in
+`quotation_delivery.route_id`. `CountryPaymentMethod.tenderKey` is likewise what
+`quotation_payment.payment_method_id` holds.
+
+Do not add a relationship from one of these to a legacy `ps_*` table. Those are
+never mapped — see repository/CLAUDE.md.

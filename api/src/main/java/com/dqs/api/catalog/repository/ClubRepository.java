@@ -23,5 +23,5 @@ public interface ClubRepository extends JpaRepository<Club, Integer> {
     @EntityGraph(attributePaths = "country")
     List<Club> findByActiveTrueOrderByName();
 
-    List<Club> findByCountry_Iso2AndActiveTrueOrderByName(String iso2);
+    List<Club> findByCountry_CodeAndActiveTrueOrderByName(String iso2);
 }

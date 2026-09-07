@@ -19,5 +19,5 @@ public interface CountryPaymentMethodRepository extends JpaRepository<CountryPay
      * moves it without touching this query.
      */
     @EntityGraph(attributePaths = "methodType")
-    List<CountryPaymentMethod> findByCountry_Iso2AndActiveTrueOrderBySortOrderAscMethodType_NameAsc(String iso2);
+    List<CountryPaymentMethod> findByCountry_CodeAndActiveTrueOrderBySortOrderAscMethodType_NameAsc(String iso2);
 }

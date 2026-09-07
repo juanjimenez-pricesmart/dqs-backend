@@ -23,7 +23,7 @@ public class PaymentController {
 
     @Operation(
         summary = "Métodos de pago por país",
-        description = "Métodos de pago disponibles para el ISO2 de país indicado. El origen (legacy u orígenes propios en Azure) depende de azure.datasource.enabled"
+        description = "Métodos de pago disponibles para el ISO2 de país indicado. El origen (orders_pago del legacy, o country_payment_methods) depende de quotecenter.catalogs.own-tables"
     )
     @GetMapping("/methods")
     public ResponseEntity<java.util.List<com.dqs.api.catalog.source.PaymentMethodInfo>> getMethods(@RequestParam String country) {

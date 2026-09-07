@@ -38,13 +38,9 @@ public class ExchangeRate {
     @Column(name = "source", length = 100)
     private String source;
 
-    /**
-     * A `users.id` from the MySQL database. Deliberately a plain value with no
-     * association: the two live in different databases and no foreign key can
-     * span them.
-     */
+    /** A `users.id`, and a real foreign key — same database. */
     @Column(name = "created_by_user_id")
-    private Long createdByUserId;
+    private Integer createdByUserId;
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private Instant createdAt;

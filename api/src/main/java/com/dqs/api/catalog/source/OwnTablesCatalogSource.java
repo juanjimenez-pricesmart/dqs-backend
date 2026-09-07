@@ -19,21 +19,21 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Catalogs read from our own tables in Azure SQL, through Spring Data.
+ * Catalogs read from QuoteCenter's own tables, through Spring Data.
  *
- * Active only when {@code azure.datasource.enabled} is true. Note what is not
- * here: no SQL. The tables are properly modelled, so a derived query name does
- * the work a hand-written SELECT used to.
+ * Active when {@code quotecenter.catalogs.own-tables} is true. Note what is not
+ * here: no SQL. The tables are properly modelled — routes have a real foreign
+ * key to clubs, tariffs are rows rather than four columns — so a derived query
+ * name does the work a hand-written SELECT used to.
  *
- * Every method is transactional against {@code catalogTransactionManager} — the
- * Azure one. The default manager belongs to MySQL, and a lazy association
- * touched outside a catalog transaction would fail.
+ * Read-only transactions because the associations are lazy: the entity graph
+ * fetches them, but the session has to still be open when they are read.
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "azure.datasource.enabled", havingValue = "true")
+@ConditionalOnProperty(name = "quotecenter.catalogs.own-tables", havingValue = "true")
 @RequiredArgsConstructor
-public class AzureCatalogSource implements CatalogSource {
+public class OwnTablesCatalogSource implements CatalogSource {
 
     private final RouteRepository routes;
     private final FiscalDocumentTypeRepository documentTypes;
@@ -41,7 +41,7 @@ public class AzureCatalogSource implements CatalogSource {
 
     @Override
     public String describe() {
-        return "Azure SQL (routes, fiscal_document_types, country_payment_methods)";
+        return "QuoteCenter tables (routes, fiscal_document_types, country_payment_methods)";
     }
 
     /**
@@ -51,24 +51,24 @@ public class AzureCatalogSource implements CatalogSource {
      * routes come back.
      */
     @Override
-    @Transactional(transactionManager = "catalogTransactionManager", readOnly = true)
+    @Transactional(readOnly = true)
     public List<RouteInfo> routesOfClub(Integer clubNumber) {
         return routes.findByClub_ClubNumberAndActiveTrueOrderByCode(clubNumber)
-                     .stream().map(AzureCatalogSource::toRoute).toList();
+                     .stream().map(OwnTablesCatalogSource::toRoute).toList();
     }
 
     @Override
-    @Transactional(transactionManager = "catalogTransactionManager", readOnly = true)
+    @Transactional(readOnly = true)
     public List<DocTypeInfo> documentTypesOfCountry(String countryIso2) {
-        return documentTypes.findByCountry_Iso2AndActiveTrueOrderByNameEs(countryIso2).stream()
+        return documentTypes.findByCountry_CodeAndActiveTrueOrderByNameEs(countryIso2).stream()
             .map(d -> new DocTypeInfo(d.getId(), d.getNameEs(), d.getCode(), d.getInputMask()))
             .toList();
     }
 
     @Override
-    @Transactional(transactionManager = "catalogTransactionManager", readOnly = true)
+    @Transactional(readOnly = true)
     public List<PaymentMethodInfo> paymentMethodsOfCountry(String countryIso2) {
-        return paymentMethods.findByCountry_Iso2AndActiveTrueOrderBySortOrderAscMethodType_NameAsc(countryIso2).stream()
+        return paymentMethods.findByCountry_CodeAndActiveTrueOrderBySortOrderAscMethodType_NameAsc(countryIso2).stream()
             .map(m -> new PaymentMethodInfo(m.getId(), m.getMethodType().getName(), m.getTenderKey()))
             .toList();
     }

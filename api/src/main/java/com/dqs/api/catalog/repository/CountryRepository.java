@@ -10,7 +10,7 @@ import java.util.Optional;
 @Repository
 public interface CountryRepository extends JpaRepository<Country, Integer> {
 
-    Optional<Country> findByIso2(String iso2);
+    Optional<Country> findByCode(String iso2);
 
     List<Country> findByActiveTrueOrderByName();
 }

@@ -3,15 +3,15 @@ package com.dqs.api.catalog.source;
 import java.util.List;
 
 /**
- * Where catalog data comes from — the legacy database, or ours in Azure.
+ * Where catalog data comes from — the legacy tables, or our own.
  *
  * <h2>Why this exists</h2>
  *
- * The two cannot simply be swapped by editing a query. Environments cut over at
- * different times: a developer machine may have no Azure instance at all while
- * staging is already on it. So the choice is a configuration flag, not a
- * deployment — {@code azure.datasource.enabled} picks the implementation, and
- * exactly one bean exists either way.
+ * Both sets of tables exist at once, in the same database, while the migration
+ * is in flight. Environments move across at different times, so the choice is a
+ * configuration flag rather than a deployment —
+ * {@code quotecenter.catalogs.own-tables} picks the implementation, and exactly
+ * one bean exists either way.
  *
  * Both implementations return identical shapes, so nothing above this line can
  * tell which one it is talking to. That is the whole point: the switch has to be
@@ -19,11 +19,11 @@ import java.util.List;
  *
  * <h2>What is not here yet</h2>
  *
- * Clubs and exchange rates. They feed the OMS payload context, which carries the
- * legacy {@code impuesto_operacion} value, and its meaning for the three
- * countries whose value is empty is still an open question — see
- * azure/README.md. Switching them before that is settled would move a decision
- * nobody has taken.
+ * Clubs and exchange rates. Both tables are populated, but they feed the OMS
+ * payload context, which carries the legacy {@code impuesto_operacion} value,
+ * and its meaning for the three countries whose value is empty is still an open
+ * question. Switching them before that is settled would move a decision nobody
+ * has taken.
  *
  * <h2>When the legacy database is switched off</h2>
  *

@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Is the Azure catalog database reachable, and does it hold what we expect?
+ * Do the QuoteCenter catalog tables hold what we expect?
  *
  * Exists because the catalogs have no consumer yet: the entities and
  * repositories are in place but no service reads them, so nothing would notice
@@ -25,15 +25,15 @@ import java.util.Map;
  * connection from inside the application, against the real instance, before any
  * user-facing code depends on it.
  *
- * Present only when azure.datasource.enabled is true — with the flag off the
+ * Present only when quotecenter.catalogs.own-tables is true — with the flag off the
  * repositories it needs do not exist as beans, so it must not either.
  */
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/diag/catalog")
-@ConditionalOnProperty(name = "azure.datasource.enabled", havingValue = "true")
+@ConditionalOnProperty(name = "quotecenter.catalogs.own-tables", havingValue = "true")
 @RequiredArgsConstructor
-@Tag(name = "Diagnóstico", description = "Estado de la base de catálogos en Azure")
+@Tag(name = "Diagnóstico", description = "Estado de las tablas de catálogo de QuoteCenter")
 public class CatalogDiagController {
 
     private final CountryRepository countries;
@@ -49,7 +49,7 @@ public class CatalogDiagController {
 
     @Operation(summary = "Conteos por tabla de catálogo")
     @GetMapping
-    @Transactional(transactionManager = "catalogTransactionManager", readOnly = true)
+    @Transactional(readOnly = true)
     public ResponseEntity<Map<String, Object>> counts() {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("source", catalogSource.describe());
@@ -75,7 +75,7 @@ public class CatalogDiagController {
      */
     @Operation(summary = "Rutas y tarifas de un club, vía Spring Data")
     @GetMapping("/routes/{clubNumber}")
-    @Transactional(transactionManager = "catalogTransactionManager", readOnly = true)
+    @Transactional(readOnly = true)
     public ResponseEntity<List<Map<String, Object>>> routesOf(@PathVariable Integer clubNumber) {
         List<Map<String, Object>> out = routes
             .findByClub_ClubNumberAndActiveTrueOrderByCode(clubNumber).stream()
@@ -97,25 +97,25 @@ public class CatalogDiagController {
     }
 
     @Operation(summary = "País y su tasa de cambio vigente")
-    @GetMapping("/country/{iso2}")
-    @Transactional(transactionManager = "catalogTransactionManager", readOnly = true)
-    public ResponseEntity<?> country(@PathVariable String iso2) {
-        return countries.findByIso2(iso2).<ResponseEntity<?>>map(c -> {
+    @GetMapping("/country/{code}")
+    @Transactional(readOnly = true)
+    public ResponseEntity<?> country(@PathVariable String code) {
+        return countries.findByCode(code).<ResponseEntity<?>>map(c -> {
             Map<String, Object> m = new LinkedHashMap<>();
-            m.put("iso2",             c.getIso2());
+            m.put("code",             c.getCode());
             m.put("name",             c.getName());
             m.put("currency",         c.getCurrencyCode());
             m.put("taxName",          c.getTaxName());
             m.put("priceIncludesTax", c.getPriceIncludesTax());
-            m.put("latestRate", rates.findFirstByCountry_Iso2OrderByEffectiveDateDesc(iso2)
+            m.put("latestRate", rates.findFirstByCountry_CodeOrderByEffectiveDateDesc(code)
                 .map(r -> (Object) Map.of("rate", r.getRate(), "date", r.getEffectiveDate().toString()))
                 .orElse(null));
             m.put("paymentMethods", countryMethods
-                .findByCountry_Iso2AndActiveTrueOrderBySortOrderAscMethodType_NameAsc(iso2).stream()
+                .findByCountry_CodeAndActiveTrueOrderBySortOrderAscMethodType_NameAsc(code).stream()
                 .map(cm -> cm.getMethodType().getCode() + " (tender " + cm.getTenderKey() + ")")
                 .toList());
             m.put("documentTypes", docTypes
-                .findByCountry_Iso2AndActiveTrueOrderByNameEs(iso2).stream()
+                .findByCountry_CodeAndActiveTrueOrderByNameEs(code).stream()
                 .map(d -> d.getCode() + " — " + d.getNameEs())
                 .toList());
             return ResponseEntity.ok(m);

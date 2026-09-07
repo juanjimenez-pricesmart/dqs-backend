@@ -11,7 +11,7 @@ import java.util.Optional;
 public interface FiscalDocumentTypeRepository extends JpaRepository<FiscalDocumentType, Integer> {
 
     /** Ordered by the Spanish label, as the legacy dropdown was. */
-    List<FiscalDocumentType> findByCountry_Iso2AndActiveTrueOrderByNameEs(String iso2);
+    List<FiscalDocumentType> findByCountry_CodeAndActiveTrueOrderByNameEs(String iso2);
 
-    Optional<FiscalDocumentType> findByCountry_Iso2AndCode(String iso2, String code);
+    Optional<FiscalDocumentType> findByCountry_CodeAndCode(String iso2, String code);
 }

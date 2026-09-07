@@ -17,8 +17,11 @@ import java.time.Instant;
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class FiscalDocumentType {
 
+    /**
+     * The legacy felid, assigned by the import rather than generated:
+     * quotation_fiscal.document_type stores this value, so it has to survive.
+     */
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -33,12 +36,6 @@ public class FiscalDocumentType {
 
     @Column(name = "name_es", nullable = false, length = 80)
     private String nameEs;
-
-    @Column(name = "min_length")
-    private Short minLength;
-
-    @Column(name = "max_length")
-    private Short maxLength;
 
     /** Was ps_fel.formato. */
     @Column(name = "input_mask", length = 150)

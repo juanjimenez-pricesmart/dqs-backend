@@ -28,7 +28,7 @@ import java.util.Map;
  *
  * `quotation_delivery` is ours and is mapped as an entity. The route catalog
  * comes from CatalogSource, which reads either the legacy `ps_rutas` or our own
- * Azure tables depending on configuration — this service does not know which.
+ * tables depending on configuration — this service does not know which.
  *
  * The public shape of this service is unchanged: Maps in, Maps out, snake_case
  * keys matching the column names the frontend already reads.
@@ -132,8 +132,8 @@ public class DeliveryService {
     /**
      * Routes for a club, with the tariffs the "Costo por ruta" panel shows.
      *
-     * Which database answers depends on azure.datasource.enabled; both return
-     * the same shape. See CatalogSource.
+     * Which tables answer depends on quotecenter.catalogs.own-tables; both return the
+     * same shape. See CatalogSource.
      */
     public List<RouteInfo> getRoutes(Integer storeId) {
         log.info("[DeliveryService] getRoutes storeId={}", storeId);

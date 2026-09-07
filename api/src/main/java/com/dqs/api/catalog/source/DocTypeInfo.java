@@ -9,9 +9,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * the Java names stay English, per the project convention.
  *
  * {@code id} is the legacy `felid`. It is persisted —
- * {@code quotation_fiscal.document_type} holds it, not the code — so the Azure
- * import inserts these rows with the felid as their explicit id rather than
- * letting IDENTITY assign new ones.
+ * {@code quotation_fiscal.document_type} holds it, not the code — so the import
+ * assigns the felid as the row's explicit id rather than generating one.
  *
  * {@code typeCode} is what the per-type number validation keys off. The
  * description is a display string and free to change; nothing should match on it.

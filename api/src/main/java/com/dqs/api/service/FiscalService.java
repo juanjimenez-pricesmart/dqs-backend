@@ -31,7 +31,7 @@ import java.util.Map;
  * `quotation_fiscal` and the four catalogs (cities, zones, neighborhoods,
  * economic_activities) are ours and go through JPA. The document type catalog
  * comes from CatalogSource, which reads either the legacy `ps_fel` or our own
- * Azure table depending on configuration.
+ * table depending on configuration.
  *
  * Maps in and maps out, with the snake_case keys the frontend reads
  * (src/api/fiscal.ts). Moving to JPA changed persistence, not the contract.
@@ -240,7 +240,7 @@ public class FiscalService {
     /**
      * Document types for a country.
      *
-     * Served from the legacy `ps_fel` or from our own Azure table depending on
+     * Served from the legacy `ps_fel` or from our own table depending on
      * configuration; the shape is identical either way. The id is the legacy
      * felid in both, because quotation_fiscal.document_type stores it.
      */

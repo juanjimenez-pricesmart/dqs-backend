@@ -14,7 +14,7 @@ public interface ExchangeRateRepository extends JpaRepository<ExchangeRate, Long
      * The rate in force for a country: the most recent one, which is what every
      * caller of the old ps_tasa_cambio query actually wanted.
      */
-    Optional<ExchangeRate> findFirstByCountry_Iso2OrderByEffectiveDateDesc(String iso2);
+    Optional<ExchangeRate> findFirstByCountry_CodeOrderByEffectiveDateDesc(String iso2);
 
-    Optional<ExchangeRate> findByCountry_Iso2AndEffectiveDate(String iso2, LocalDate effectiveDate);
+    Optional<ExchangeRate> findByCountry_CodeAndEffectiveDate(String iso2, LocalDate effectiveDate);
 }

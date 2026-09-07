@@ -12,17 +12,17 @@ import java.util.Map;
 /**
  * Catalogs read out of the legacy database, as they always have been.
  *
- * Active whenever {@code azure.datasource.enabled} is not true, which is the
+ * Active whenever {@code quotecenter.catalogs.own-tables} is not true, which is the
  * default. Native SQL because these tables belong to the application being
  * retired and must not be mapped as entities — see repository/CLAUDE.md.
  *
  * This class is the thing the migration is trying to delete. Nothing new should
- * be added to it; when the last environment is on Azure it goes, along with the
+ * be added to it; when the last environment is off the legacy tables it goes, with the
  * interface.
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "azure.datasource.enabled", havingValue = "false", matchIfMissing = true)
+@ConditionalOnProperty(name = "quotecenter.catalogs.own-tables", havingValue = "false", matchIfMissing = true)
 @RequiredArgsConstructor
 public class LegacyCatalogSource implements CatalogSource {
 

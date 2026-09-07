@@ -83,7 +83,7 @@ public class FiscalController {
     }
 
     @Operation(summary = "Tipos de documento fiscal por país",
-               description = "El origen depende de azure.datasource.enabled: ps_fel en el legacy, o fiscal_document_types en Azure")
+               description = "El origen depende de quotecenter.catalogs.own-tables: ps_fel del legacy, o fiscal_document_types")
     @GetMapping("/catalog/doc-types")
     public ResponseEntity<List<com.dqs.api.catalog.source.DocTypeInfo>> docTypes(@RequestParam String country) {
         return ResponseEntity.ok(fiscalService.getDocTypes(country));
