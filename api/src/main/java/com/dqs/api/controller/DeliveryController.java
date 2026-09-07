@@ -36,7 +36,7 @@ public class DeliveryController {
 
     @Operation(summary = "Active delivery routes for a store")
     @GetMapping("/routes")
-    public ResponseEntity<List<Map<String, Object>>> getRoutes(@RequestParam Integer storeId) {
+    public ResponseEntity<List<com.dqs.api.catalog.source.RouteInfo>> getRoutes(@RequestParam Integer storeId) {
         log.info("[DeliveryController] GET /routes storeId={}", storeId);
         return ResponseEntity.ok(deliveryService.getRoutes(storeId));
     }

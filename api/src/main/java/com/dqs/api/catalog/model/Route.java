@@ -40,12 +40,6 @@ public class Route {
     @Column(name = "truck_size", nullable = false, precision = 10, scale = 2)
     private BigDecimal truckSize;
 
-    @Column(name = "requires_full_pallet", nullable = false)
-    private Boolean requiresFullPallet;
-
-    @Column(name = "requires_half_pallet", nullable = false)
-    private Boolean requiresHalfPallet;
-
     @Column(name = "is_active", nullable = false)
     private Boolean active;
 

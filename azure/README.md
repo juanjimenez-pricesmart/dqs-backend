@@ -188,13 +188,31 @@ SQL Server in Docker is close enough to Azure SQL for this schema:
 `trustServerCertificate=true` is for the container's self-signed certificate.
 Never set it against a real Azure instance.
 
-## What still reads the legacy database
+## Switching a catalog over
 
-**The services have not been switched over.** They still read `ps_tienda`,
-`ps_rutas`, `ps_fel`, `orders_pago` and `ps_tasa_cambio` through
-`NativeQueries` against MySQL. The Azure side is wired and proven but has no
-consumer, which is why the flag defaults to off and nothing injects a catalog
-repository outside the diagnostics controller.
+Three catalogs go through `CatalogSource`, an interface with two
+implementations picked by the same flag: `LegacyCatalogSource` reads the old
+tables, `AzureCatalogSource` reads ours. Exactly one bean exists, the services
+cannot tell which, and moving an environment across is a configuration change
+rather than a deployment — reversible if something turns out to be wrong.
+
+| Catalog | Legacy | Ours | Endpoint |
+|---|---|---|---|
+| Routes and tariffs | `ps_rutas`, `ps_tipos_ruta` | `routes`, `route_prices`, `route_types` | `/api/v1/deliveries/routes` |
+| Fiscal document types | `ps_fel` | `fiscal_document_types` | `/api/v1/fiscal/catalog/doc-types` |
+| Payment methods | `orders_pago` | `country_payment_methods` | `/api/v1/payments/methods` |
+
+Both sides were captured and diffed. Routes and document types come back
+**byte-identical**. Payment methods match on every description and tender key in
+the same order; only the row `id` differs, which is a React key and is not
+persisted — `quotation_payment.payment_method_id` stores the tender key.
+
+**Clubs and exchange rates are deliberately not in `CatalogSource` yet.** They
+feed the OMS payload context, which carries `impuesto_operacion`, and what that
+means for the three countries whose legacy value is empty is still open — see
+above. Switching them first would take a decision nobody has taken.
+
+`ps_delivery_log_cargue` and the two cross-database queries stay where they are.
 
 Two queries join a legacy table to a QuoteCenter table and cannot simply be
 repointed, since the two will live in different databases:

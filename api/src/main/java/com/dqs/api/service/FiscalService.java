@@ -12,7 +12,8 @@ import com.dqs.api.repository.NeighborhoodRepository;
 import com.dqs.api.repository.QuotationFiscalRepository;
 import com.dqs.api.repository.QuotationRepository;
 import com.dqs.api.repository.ZoneRepository;
-import com.dqs.api.repository.support.NativeQueries;
+import com.dqs.api.catalog.source.CatalogSource;
+import com.dqs.api.catalog.source.DocTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,10 +29,9 @@ import java.util.Map;
  * Fiscal / electronic-invoicing data for a quotation.
  *
  * `quotation_fiscal` and the four catalogs (cities, zones, neighborhoods,
- * economic_activities) are ours and go through JPA. `ps_fel` — the document
- * type catalog — belongs to the legacy application and is read with a native
- * query rather than mapped, so a schema change on their side cannot stop this
- * one from starting. See repository/CLAUDE.md.
+ * economic_activities) are ours and go through JPA. The document type catalog
+ * comes from CatalogSource, which reads either the legacy `ps_fel` or our own
+ * Azure table depending on configuration.
  *
  * Maps in and maps out, with the snake_case keys the frontend reads
  * (src/api/fiscal.ts). Moving to JPA changed persistence, not the contract.
@@ -43,7 +43,7 @@ public class FiscalService {
 
     private final GoSocketClient goSocketClient;
     private final ObjectMapper objectMapper;
-    private final NativeQueries nativeQueries;
+    private final CatalogSource catalogSource;
 
     private final QuotationFiscalRepository fiscalRepository;
     private final QuotationRepository quotationRepository;
@@ -238,18 +238,14 @@ public class FiscalService {
     }
 
     /**
-     * Document types for a country — legacy's `ps_fel`, read natively.
+     * Document types for a country.
      *
-     * nombre_en is the document's type code — NIT, CUI, PHYSICAL, LEGAL, DIMEX,
-     * NITE — which is what the per-type number validation keys off. Legacy
-     * carries it on the option as data-type; without it the frontend can only
-     * match on the Spanish label, which is a display string and free to change.
+     * Served from the legacy `ps_fel` or from our own Azure table depending on
+     * configuration; the shape is identical either way. The id is the legacy
+     * felid in both, because quotation_fiscal.document_type stores it.
      */
-    public List<Map<String, Object>> getDocTypes(String country) {
-        return nativeQueries.list(
-            "SELECT felid, nombre_es AS descripcion, nombre_en AS typeCode, formato " +
-            "FROM ps_fel WHERE pais_iso2 = ?1 ORDER BY nombre_es",
-            country);
+    public List<DocTypeInfo> getDocTypes(String country) {
+        return catalogSource.documentTypesOfCountry(country);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

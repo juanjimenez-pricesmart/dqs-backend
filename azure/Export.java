@@ -145,11 +145,10 @@ public class Export {
             w.printf("MERGE dbo.routes AS t USING (SELECT (SELECT id FROM dbo.clubs WHERE club_number = %d) AS club, %s AS code) AS s%n",
                 rs.getInt(1), q(rs.getString(2)));
             w.printf("  ON t.club_id = s.club AND t.code = s.code%n");
-            w.printf("WHEN NOT MATCHED AND s.club IS NOT NULL THEN INSERT (club_id, code, route_type_id, name, truck_size, requires_full_pallet, requires_half_pallet, is_active)%n");
-            w.printf("     VALUES (s.club, s.code, %s, %s, %s, %d, %d, %d);%n",
+            w.printf("WHEN NOT MATCHED AND s.club IS NOT NULL THEN INSERT (club_id, code, route_type_id, name, truck_size, is_active)%n");
+            w.printf("     VALUES (s.club, s.code, %s, %s, %s, %d);%n",
                 rt == null ? "NULL" : "(SELECT id FROM dbo.route_types WHERE code = " + q(rt) + ")",
                 q(rs.getString(3)), n(rs.getObject(4)),
-                rs.getInt(7) > 0 ? 1 : 0, rs.getInt(8) > 0 ? 1 : 0,
                 "A".equals(rs.getString(5)) ? 1 : 0);
             nr++;
         }
@@ -162,24 +161,27 @@ public class Export {
             -- `14pallet_local`, `14pallet_usd`. One row per tier here, so adding a tier
             -- stops being an ALTER. A tier the legacy row left NULL produces no row.""");
         rs = c.createStatement().executeQuery(
-            "SELECT r.ps_tienda_id, r.llave, r.pallet_local, r.halfpallet_local, r.`14pallet_local`, r.`14pallet_usd` " +
+            "SELECT r.ps_tienda_id, r.llave, r.pallet_local, r.halfpallet_local, r.`14pallet_local`, r.`14pallet_usd`, " +
+            "       r.pallet_required, r.halfpallet_required " +
             "FROM ps_rutas r JOIN ps_tienda t ON t.ps_tienda_id = r.ps_tienda_id " +
             "ORDER BY r.ps_tienda_id, r.llave");
         int np = 0;
         while (rs.next()) {
             int club = rs.getInt(1); String key = rs.getString(2);
+            int fullMin = rs.getInt(7), halfMin = rs.getInt(8);
             Object[][] tiers = {
-                {"FULL_PALLET",    rs.getObject(3), null},
-                {"HALF_PALLET",    rs.getObject(4), null},
-                {"QUARTER_PALLET", rs.getObject(5), rs.getObject(6)},
+                {"FULL_PALLET",    rs.getObject(3), null,            fullMin > 0 ? fullMin : null},
+                {"HALF_PALLET",    rs.getObject(4), null,            halfMin > 0 ? halfMin : null},
+                // The legacy row carries no minimum for the quarter-pallet tier.
+                {"QUARTER_PALLET", rs.getObject(5), rs.getObject(6), null},
             };
             for (Object[] t : tiers) {
                 if (t[1] == null && t[2] == null) continue;
                 w.printf("MERGE dbo.route_prices AS t USING (SELECT (SELECT r.id FROM dbo.routes r JOIN dbo.clubs cl ON cl.id = r.club_id WHERE cl.club_number = %d AND r.code = %s) AS rid, %s AS ut) AS s%n",
                     club, q(key), q((String) t[0]));
                 w.printf("  ON t.route_id = s.rid AND t.unit_type = s.ut%n");
-                w.printf("WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd) VALUES (s.rid, s.ut, %s, %s);%n",
-                    t[1] == null ? "0" : n(t[1]), t[2] == null ? "0" : n(t[2]));
+                w.printf("WHEN NOT MATCHED AND s.rid IS NOT NULL THEN INSERT (route_id, unit_type, price_local, price_usd, minimum_quantity) VALUES (s.rid, s.ut, %s, %s, %s);%n",
+                    t[1] == null ? "0" : n(t[1]), t[2] == null ? "0" : n(t[2]), n(t[3]));
                 np++;
             }
         }
@@ -238,8 +240,13 @@ public class Export {
             w.printf("MERGE dbo.country_payment_methods AS t USING (SELECT (SELECT id FROM dbo.countries WHERE iso2 = %s) AS cid, (SELECT id FROM dbo.payment_method_types WHERE code = %s) AS mid) AS s%n",
                 q(rs.getString(1)), q(rs.getString(2)));
             w.printf("  ON t.country_id = s.cid AND t.method_type_id = s.mid%n");
+            // sort_order stays 0 for every row. Legacy ordered the dropdown
+            // alphabetically by description, and the reader falls back to the
+            // method name when the order is equal, so this reproduces it exactly.
+            // The column is here so the list can be curated later — set a
+            // non-zero value and that row moves.
             w.printf("WHEN NOT MATCHED AND s.cid IS NOT NULL AND s.mid IS NOT NULL THEN INSERT (country_id, method_type_id, tender_key, sort_order)%n");
-            w.printf("     VALUES (s.cid, s.mid, %d, %d);%n", rs.getInt(3), rs.getInt(4));
+            w.printf("     VALUES (s.cid, s.mid, %d, 0);%n", rs.getInt(3));
             ncpm++;
         }
         w.println("GO\n");

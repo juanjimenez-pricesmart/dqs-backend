@@ -45,12 +45,14 @@ public class CatalogDiagController {
     private final PaymentMethodTypeRepository methodTypes;
     private final CountryPaymentMethodRepository countryMethods;
     private final ExchangeRateRepository rates;
+    private final com.dqs.api.catalog.source.CatalogSource catalogSource;
 
     @Operation(summary = "Conteos por tabla de catálogo")
     @GetMapping
     @Transactional(transactionManager = "catalogTransactionManager", readOnly = true)
     public ResponseEntity<Map<String, Object>> counts() {
         Map<String, Object> m = new LinkedHashMap<>();
+        m.put("source", catalogSource.describe());
         m.put("countries",               countries.count());
         m.put("clubs",                   clubs.count());
         m.put("route_types",             routeTypes.count());
@@ -109,7 +111,7 @@ public class CatalogDiagController {
                 .map(r -> (Object) Map.of("rate", r.getRate(), "date", r.getEffectiveDate().toString()))
                 .orElse(null));
             m.put("paymentMethods", countryMethods
-                .findByCountry_Iso2AndActiveTrueOrderBySortOrder(iso2).stream()
+                .findByCountry_Iso2AndActiveTrueOrderBySortOrderAscMethodType_NameAsc(iso2).stream()
                 .map(cm -> cm.getMethodType().getCode() + " (tender " + cm.getTenderKey() + ")")
                 .toList());
             m.put("documentTypes", docTypes

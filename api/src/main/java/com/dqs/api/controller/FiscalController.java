@@ -82,9 +82,10 @@ public class FiscalController {
         return ResponseEntity.ok(fiscalService.getNeighborhoods(zoneCode, cityCode));
     }
 
-    @Operation(summary = "Tipos de documento fiscal por país (ps_fel)")
+    @Operation(summary = "Tipos de documento fiscal por país",
+               description = "El origen depende de azure.datasource.enabled: ps_fel en el legacy, o fiscal_document_types en Azure")
     @GetMapping("/catalog/doc-types")
-    public ResponseEntity<List<Map<String, Object>>> docTypes(@RequestParam String country) {
+    public ResponseEntity<List<com.dqs.api.catalog.source.DocTypeInfo>> docTypes(@RequestParam String country) {
         return ResponseEntity.ok(fiscalService.getDocTypes(country));
     }
 }
