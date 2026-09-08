@@ -23,6 +23,7 @@ public class QuotationController {
 
     private final QuotationService quotationService;
     private final com.dqs.api.repository.QuotationListRepository quotationListRepository;
+    private final com.dqs.api.service.BankTransferNoticeService bankTransferNoticeService;
 
     @Operation(summary = "List quotations for a store", description = "Legacy-parity quotations list. Period filter only applies to non-pending statuses; scope=mine restricts to the given userId")
     @GetMapping
@@ -123,6 +124,21 @@ public class QuotationController {
                 (List<java.util.Map<String, Object>>) body.getOrDefault("lines", List.of());
         log.info("[QuotationController] POST /api/v1/quotations/{}/items/bulk lines={}", id, lines.size());
         return ResponseEntity.ok(quotationService.addItemsBulk(id, clubId, lines));
+    }
+
+    /**
+     * Advisory only, as legacy is: it warns under the payment method and never
+     * blocks the close. Returns the figures rather than a sentence — the wording
+     * is composed in the frontend through i18n, so both locales read correctly.
+     */
+    @Operation(summary = "Aviso de mínimo para Transferencia Bancaria",
+               description = "B2B-676: indica si el total de la cotización alcanza el mínimo del país")
+    @GetMapping("/{id}/bank-transfer-notice")
+    public ResponseEntity<com.dqs.api.dto.BankTransferNoticeResponse> bankTransferNotice(
+            @PathVariable Long id,
+            @RequestParam String paymentMethod) {
+        log.info("[QuotationController] GET /{}/bank-transfer-notice paymentMethod={}", id, paymentMethod);
+        return ResponseEntity.ok(bankTransferNoticeService.check(id, paymentMethod));
     }
 
     @Operation(summary = "Listar ítems", description = "Retorna todos los ítems de la cotización ordenados por productId")
