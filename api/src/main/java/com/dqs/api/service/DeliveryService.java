@@ -109,6 +109,10 @@ public class DeliveryService {
         delivery.setRouteId(toStringOrNull(data.get("route_id")));
         delivery.setRouteName(toStringOrNull(data.get("route_name")));
         delivery.setPallets(toDecimal(data.get("pallets"), null));
+        // city_id is the catalog id; city_name is the label snapshot, sent by the
+        // panel so the quote keeps reading correctly if the city is later renamed.
+        delivery.setCityCode(toStringOrNull(data.get("city_id")));
+        delivery.setCityName(toStringOrNull(data.get("city_name")));
 
         deliveryRepository.save(delivery);
 
@@ -209,6 +213,9 @@ public class DeliveryService {
         m.put("route_id",      d.getRouteId());
         m.put("route_name",    d.getRouteName());
         m.put("pallets",       d.getPallets());
+        // city_id, not city_code: the panel reads back what it sent.
+        m.put("city_id",       d.getCityCode());
+        m.put("city_name",     d.getCityName());
         m.put("logcargueid",   d.getLogCargueId());
         m.put("created_at",    d.getCreatedAt() != null ? d.getCreatedAt().toString() : null);
         m.put("updated_at",    d.getUpdatedAt() != null ? d.getUpdatedAt().toString() : null);
