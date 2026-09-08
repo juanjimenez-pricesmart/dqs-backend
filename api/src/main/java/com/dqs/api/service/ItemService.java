@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,18 +66,11 @@ public class ItemService {
      * of every quote — must not fail because a secondary display detail is
      * unavailable.
      */
-    @SuppressWarnings("unchecked")
     private List<Map<String, Object>> clubsOnhand(String itemCode, Integer clubId) {
         List<Map<String, Object>> clubs = new ArrayList<>();
         try {
-            String body = businessApiClient.get("/api/getQuantity/" + itemCode + "/club/" + clubId).trim();
-            if (!body.startsWith("[")) {
-                log.warn("[ItemService] getQuantity itemCode={} returned a non-array payload", itemCode);
-                return clubs;
-            }
-            Map<String, Object>[] rows = objectMapper.readValue(body, Map[].class);
-            if (rows == null) return clubs;
-            for (Map<String, Object> row : rows) {
+            String body = businessApiClient.get("/api/getQuantity/" + itemCode + "/club/" + clubId);
+            for (Map<String, Object> row : quantityRows(body.trim(), itemCode)) {
                 Map<String, Object> entry = new LinkedHashMap<>();
                 entry.put("costCenter", str(row.get("cost_center")));
                 entry.put("quantityOnHand", row.get("qtyOnHand"));
@@ -87,6 +81,30 @@ public class ItemService {
                      itemCode, clubId, e.getMessage());
         }
         return clubs;
+    }
+
+    /**
+     * The per-club rows out of a getQuantity payload.
+     *
+     * The endpoint answers with an object — {@code total_Quantity} beside a
+     * {@code listQuantityCountry} array — which is what legacy reads
+     * (views/orders/createbb.php iterates response.listQuantityCountry and
+     * renders total_Quantity as its own badge). The bare-array branch is kept
+     * because the sibling getItemCode endpoint demonstrably varies its shape
+     * per item, and an unexpected array here should degrade to no badges rather
+     * than throw.
+     */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> quantityRows(String body, String itemCode) throws Exception {
+        if (body.startsWith("[")) {
+            Map<String, Object>[] arr = objectMapper.readValue(body, Map[].class);
+            return arr == null ? List.of() : Arrays.asList(arr);
+        }
+        Map<String, Object> payload = objectMapper.readValue(body, Map.class);
+        Object rows = payload.get("listQuantityCountry");
+        if (rows instanceof List<?> list) return (List<Map<String, Object>>) list;
+        log.warn("[ItemService] getQuantity itemCode={} carried no listQuantityCountry", itemCode);
+        return List.of();
     }
 
     /** costCenter is a club number, rendered as a badge label — the frontend types it as a string. */
