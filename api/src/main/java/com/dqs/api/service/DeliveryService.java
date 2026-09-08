@@ -8,6 +8,7 @@ import com.dqs.api.repository.QuotationDeliveryRepository;
 import com.dqs.api.repository.QuotationItemRepository;
 import com.dqs.api.repository.QuotationRepository;
 import com.dqs.api.catalog.source.CatalogSource;
+import com.dqs.api.catalog.source.DeliveryCityInfo;
 import com.dqs.api.catalog.source.RouteInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -138,6 +139,18 @@ public class DeliveryService {
     public List<RouteInfo> getRoutes(Integer storeId) {
         log.info("[DeliveryService] getRoutes storeId={}", storeId);
         return catalogSource.routesOfClub(storeId);
+    }
+
+    // ── Cities for a country ──────────────────────────────────────────────────
+
+    /**
+     * Cities a delivery can be sent to. Countries with no rows get an empty
+     * list, and the panel hides its selector — which is how the legacy screen
+     * behaves too, since the catalog is only populated where delivery runs.
+     */
+    public List<DeliveryCityInfo> getCities(String countryIso2) {
+        log.info("[DeliveryService] getCities countryIso2={}", countryIso2);
+        return catalogSource.deliveryCitiesOfCountry(countryIso2);
     }
 
     // ── Read ──────────────────────────────────────────────────────────────────

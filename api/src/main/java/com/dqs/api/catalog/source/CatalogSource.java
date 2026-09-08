@@ -41,6 +41,9 @@ public interface CatalogSource {
     /** Payment methods available in a country. */
     List<PaymentMethodInfo> paymentMethodsOfCountry(String countryIso2);
 
+    /** Cities a delivery can be sent to in a country. */
+    List<DeliveryCityInfo> deliveryCitiesOfCountry(String countryIso2);
+
     /** Which implementation is live, for diagnostics and logging. */
     String describe();
 }

@@ -4,6 +4,7 @@ import com.dqs.api.catalog.model.Route;
 import com.dqs.api.catalog.model.RoutePrice;
 import com.dqs.api.catalog.model.RouteUnitType;
 import com.dqs.api.catalog.repository.CountryPaymentMethodRepository;
+import com.dqs.api.catalog.repository.DeliveryCityRepository;
 import com.dqs.api.catalog.repository.FiscalDocumentTypeRepository;
 import com.dqs.api.catalog.repository.RouteRepository;
 import lombok.RequiredArgsConstructor;
@@ -38,10 +39,11 @@ public class OwnTablesCatalogSource implements CatalogSource {
     private final RouteRepository routes;
     private final FiscalDocumentTypeRepository documentTypes;
     private final CountryPaymentMethodRepository paymentMethods;
+    private final DeliveryCityRepository deliveryCities;
 
     @Override
     public String describe() {
-        return "QuoteCenter tables (routes, fiscal_document_types, country_payment_methods)";
+        return "QuoteCenter tables (routes, fiscal_document_types, country_payment_methods, delivery_cities)";
     }
 
     /**
@@ -70,6 +72,18 @@ public class OwnTablesCatalogSource implements CatalogSource {
     public List<PaymentMethodInfo> paymentMethodsOfCountry(String countryIso2) {
         return paymentMethods.findByCountry_CodeAndActiveTrueOrderBySortOrderAscMethodType_NameAsc(countryIso2).stream()
             .map(m -> new PaymentMethodInfo(m.getId(), m.getMethodType().getName(), m.getTenderKey()))
+            .toList();
+    }
+
+    /**
+     * The id is stringified here and cast to CHAR on the legacy side, so both
+     * sources answer with the string the panel's option list compares against.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<DeliveryCityInfo> deliveryCitiesOfCountry(String countryIso2) {
+        return deliveryCities.findByCountry_CodeAndActiveTrueOrderByName(countryIso2).stream()
+            .map(c -> new DeliveryCityInfo(String.valueOf(c.getId()), c.getName()))
             .toList();
     }
 
