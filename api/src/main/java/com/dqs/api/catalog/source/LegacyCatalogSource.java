@@ -30,7 +30,7 @@ public class LegacyCatalogSource implements CatalogSource {
 
     @Override
     public String describe() {
-        return "legacy MySQL (ps_rutas, ps_fel, orders_pago)";
+        return "legacy MySQL (ps_rutas, ps_fel, orders_pago, ps_delivery_ciudades)";
     }
 
     /**
@@ -78,6 +78,32 @@ public class LegacyCatalogSource implements CatalogSource {
             countryIso2).stream().map(LegacyCatalogSource::toPaymentMethod).toList();
     }
 
+    /**
+     * Added despite the note above, because there was no alternative: the city
+     * catalog existed nowhere else, and the flag has to keep working in both
+     * positions. migration_delivery_cities.sql gives the own-tables side its
+     * copy, so this method is retired with the rest of the class.
+     *
+     * `idco` is the id the delivery row stores (legacy `orders_delivery.ciudadid`),
+     * cast to CHAR so it reaches the panel as the string its option list compares.
+     * `status = 1` and the name ordering are legacy's own filter — Model_orders
+     * ::getciudades.
+     *
+     * TRIM because most of these names carry a trailing space in the legacy
+     * table ("Armenia ", "Bogota "). The import into delivery_cities trims too,
+     * so both sources answer with the same label and flipping the catalog flag
+     * does not change what the operator reads.
+     */
+    @Override
+    public List<DeliveryCityInfo> deliveryCitiesOfCountry(String countryIso2) {
+        return nativeQueries.list(
+            "SELECT CAST(idco AS CHAR) AS id, TRIM(nombre) AS name " +
+            "FROM ps_delivery_ciudades " +
+            "WHERE pais_iso2 = ?1 AND status = 1 " +
+            "ORDER BY nombre ASC",
+            countryIso2).stream().map(LegacyCatalogSource::toDeliveryCity).toList();
+    }
+
     // ── row → record ─────────────────────────────────────────────────────────
 
     private static RouteInfo toRoute(Map<String, Object> r) {
@@ -92,6 +118,10 @@ public class LegacyCatalogSource implements CatalogSource {
     private static DocTypeInfo toDocType(Map<String, Object> r) {
         return new DocTypeInfo(integer(r.get("felid")), str(r.get("descripcion")),
                                str(r.get("typeCode")), str(r.get("formato")));
+    }
+
+    private static DeliveryCityInfo toDeliveryCity(Map<String, Object> r) {
+        return new DeliveryCityInfo(str(r.get("id")), str(r.get("name")));
     }
 
     private static PaymentMethodInfo toPaymentMethod(Map<String, Object> r) {

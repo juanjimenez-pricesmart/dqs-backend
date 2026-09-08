@@ -41,6 +41,16 @@ public class DeliveryController {
         return ResponseEntity.ok(deliveryService.getRoutes(storeId));
     }
 
+    // ── Cities ────────────────────────────────────────────────────────────────
+
+    @Operation(summary = "Delivery cities available in a country")
+    @GetMapping("/cities")
+    public ResponseEntity<List<com.dqs.api.catalog.source.DeliveryCityInfo>> getCities(
+            @RequestParam String countryIso2) {
+        log.info("[DeliveryController] GET /cities countryIso2={}", countryIso2);
+        return ResponseEntity.ok(deliveryService.getCities(countryIso2));
+    }
+
     // ── quotation_delivery ────────────────────────────────────────────────────
 
     @Operation(summary = "Guardar datos de delivery para una cotización")
