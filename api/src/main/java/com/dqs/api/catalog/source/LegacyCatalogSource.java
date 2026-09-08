@@ -88,11 +88,16 @@ public class LegacyCatalogSource implements CatalogSource {
      * cast to CHAR so it reaches the panel as the string its option list compares.
      * `status = 1` and the name ordering are legacy's own filter — Model_orders
      * ::getciudades.
+     *
+     * TRIM because most of these names carry a trailing space in the legacy
+     * table ("Armenia ", "Bogota "). The import into delivery_cities trims too,
+     * so both sources answer with the same label and flipping the catalog flag
+     * does not change what the operator reads.
      */
     @Override
     public List<DeliveryCityInfo> deliveryCitiesOfCountry(String countryIso2) {
         return nativeQueries.list(
-            "SELECT CAST(idco AS CHAR) AS id, nombre AS name " +
+            "SELECT CAST(idco AS CHAR) AS id, TRIM(nombre) AS name " +
             "FROM ps_delivery_ciudades " +
             "WHERE pais_iso2 = ?1 AND status = 1 " +
             "ORDER BY nombre ASC",
