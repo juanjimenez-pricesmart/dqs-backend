@@ -76,6 +76,19 @@ public class QuotationDelivery {
     @Column(name = "pallets", precision = 10, scale = 2)
     private BigDecimal pallets;
 
+    /**
+     * The delivery city, as the catalog identifies it — delivery_cities.id, the
+     * legacy ps_delivery_ciudades.idco. A String like routeId beside it, and for
+     * the same reason: the panel resolves the selection as a string and the
+     * catalog serves it as one, whichever side of the catalog flag it comes from.
+     */
+    @Column(name = "city_code", length = 20)
+    private String cityCode;
+
+    /** Snapshot of the city name at the time of quoting. */
+    @Column(name = "city_name", length = 100)
+    private String cityName;
+
     /** Load id assigned when the delivery is dispatched; written elsewhere. */
     @Column(name = "logcargueid")
     private Double logCargueId;
