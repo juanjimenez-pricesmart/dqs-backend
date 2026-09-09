@@ -19,10 +19,22 @@ public class DiagController {
             "SHOW TABLES LIKE 'ps_%'", String.class);
     }
 
+    /**
+     * `peso` is the store's weight unit, and the totals block needs it: legacy
+     * prints it in the label — "Total Peso (Kg)" — from the same column
+     * (model_stores::getStoreSMetrico, rendered raw in edit.php:547).
+     *
+     * Its values are not clean — Kg, Kgs and Lbs all occur — and it is returned
+     * as stored rather than normalised, because that is what the legacy label
+     * shows. Note the separate bug this exposes: legacy's weight arithmetic
+     * compares `strtoupper($smpeso) == 'KG'`, so the one store recorded as
+     * "Kgs" is treated as pounds. Not fixed here; recorded so it is not
+     * mistaken for something this change introduced.
+     */
     @GetMapping("/stores")
     public List<Map<String, Object>> stores() {
         return nativeQueries.list(
-            "SELECT ps_tienda_id, nombre, pais, pais_iso2, idioma, moneda, status FROM ps_tienda ORDER BY pais, nombre");
+            "SELECT ps_tienda_id, nombre, pais, pais_iso2, idioma, moneda, peso, status FROM ps_tienda ORDER BY pais, nombre");
     }
 
     @GetMapping("/store/{id}")
