@@ -50,13 +50,13 @@ public class DiagController {
     }
 
     @GetMapping("/tasa/{iso2}")
-    public List<Map<String, Object>> tasa(@PathVariable String iso2) {
+    public List<Map<String, Object>> exchangeRate(@PathVariable String iso2) {
         return nativeQueries.list(
             "SELECT * FROM ps_tasa_cambio WHERE ps_pais_iso2 = ?", iso2);
     }
 
     @GetMapping("/tasa-actual/{iso2}")
-    public List<Map<String, Object>> tasaActual(@PathVariable String iso2) {
+    public List<Map<String, Object>> currentExchangeRate(@PathVariable String iso2) {
         return nativeQueries.list(
             "SELECT ps_tasa_cambio_tipocambio FROM ps_tasa_cambio " +
             "WHERE ps_pais_iso2 = ? ORDER BY ps_tasa_cambio_id DESC LIMIT 1", iso2);

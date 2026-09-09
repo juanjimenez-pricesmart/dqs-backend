@@ -2,6 +2,7 @@ package com.dqs.api.controller;
 
 import com.dqs.api.dto.DeliveryLogResponse;
 import com.dqs.api.service.DeliveryLogService;
+import com.dqs.api.util.MapUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -34,8 +35,8 @@ public class DeliveryLogController {
     @Operation(summary = "Create a new delivery log and link quotations to it")
     @PostMapping
     public ResponseEntity<DeliveryLogResponse> create(@RequestBody Map<String, Object> body) {
-        int storeId         = toInt(body.get("storeId"));
-        int createdBy       = toInt(body.getOrDefault("createdBy", 1));
+        int storeId         = MapUtils.toInt(body.get("storeId"));
+        int createdBy       = MapUtils.toInt(body.getOrDefault("createdBy", 1));
         String routeId      = body.getOrDefault("routeId", "").toString();
         List<Long> quotationIds = toIdList(body.get("quotationIds"));
         log.info("[DeliveryLogController] POST / storeId={} routeId={} quotations={}", storeId, routeId, quotationIds);
@@ -91,12 +92,6 @@ public class DeliveryLogController {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private int toInt(Object v) {
-        if (v == null) return 0;
-        if (v instanceof Number) return ((Number) v).intValue();
-        return Integer.parseInt(v.toString());
-    }
 
     @SuppressWarnings("unchecked")
     private List<Long> toIdList(Object v) {

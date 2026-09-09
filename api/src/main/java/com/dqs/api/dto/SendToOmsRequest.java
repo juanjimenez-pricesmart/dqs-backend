@@ -11,6 +11,6 @@ public class SendToOmsRequest {
     @JsonProperty("submittedBy")
     private Integer submittedBy;
 
-    @JsonProperty("ventanas")
-    private String ventanas = "";
+    @JsonProperty("deliveryWindows")
+    private String deliveryWindows = "";
 }

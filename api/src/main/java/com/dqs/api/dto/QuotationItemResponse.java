@@ -16,25 +16,25 @@ public class QuotationItemResponse {
     private BigDecimal rate;
     private BigDecimal signPrice;
     private BigDecimal amount;
-    private String icomments;
-    private Integer includepic;
-    private Integer variacion;
+    private String comment;
+    private Integer includeImage;
+    private Integer priceVariation;
 
     // taxes
-    private BigDecimal taxPorcentaje;
+    private BigDecimal taxPercentage;
     private BigDecimal taxFactor;
     private BigDecimal taxAmount;
     private BigDecimal taxIco;
-    private BigDecimal excentPorcentaje;
-    private BigDecimal excentAmount;
+    private BigDecimal exemptionPercentage;
+    private BigDecimal exemptionAmount;
 
     // product snapshot
     private String description;
-    private BigDecimal cuEa;
+    private BigDecimal packSize;
     private BigDecimal pl;
-    private BigDecimal weightEa;
+    private BigDecimal weightPerUnit;
     private BigDecimal weightResult;
-    private BigDecimal palletxqty;
+    private BigDecimal palletQuantity;
     private BigDecimal onhand;
     private String soldByWeight;
     private String recipe;

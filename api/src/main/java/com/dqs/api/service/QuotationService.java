@@ -2,6 +2,7 @@ package com.dqs.api.service;
 
 import com.dqs.api.dto.*;
 import com.dqs.api.exception.QuotationAlreadySubmittedException;
+import com.dqs.api.util.MapUtils;
 import com.dqs.api.exception.QuotationNotFoundException;
 import com.dqs.api.model.*;
 import com.dqs.api.repository.QuotationItemRepository;
@@ -61,7 +62,7 @@ public class QuotationService {
                 .storeId(req.getStoreId())
                 .userId(req.getUserId())
                 .statusId(1)
-                .dexpired(parseExpiry(req.getDexpired()))
+                .expiryDate(parseExpiry(req.getExpiryDate()))
                 .build();
 
         QuotationCustomer customer = QuotationCustomer.builder()
@@ -74,7 +75,7 @@ public class QuotationService {
         QuotationTotals totals = QuotationTotals.builder()
                 .quotation(quotation)
                 .taxRate(req.getTaxRate())
-                .aplicarImpuestos(req.getAplicarImpuestos())
+                .applyTaxes(req.getApplyTaxes())
                 .excent(0)
                 .grossAmount(req.getGrossAmount())
                 .netAmount(req.getNetAmount())
@@ -127,17 +128,17 @@ public class QuotationService {
 
         Quotation quotation = findOrThrow(quotationId);
 
-        BigDecimal qty       = coalesce(req.getQty(),       BigDecimal.ZERO);
-        BigDecimal signPrice = coalesce(req.getSignPrice(),  BigDecimal.ZERO);
-        BigDecimal taxFactor = coalesce(req.getTaxFactor(),  BigDecimal.ZERO);
-        BigDecimal pl        = coalesce(req.getPl(),         BigDecimal.ONE);
-        BigDecimal weightEa  = coalesce(req.getWeightEa(),   BigDecimal.ZERO);
-        BigDecimal taxIco    = coalesce(req.getTaxIco(),     BigDecimal.ZERO);
+        BigDecimal qty       = MapUtils.coalesce(req.getQty(),       BigDecimal.ZERO);
+        BigDecimal signPrice = MapUtils.coalesce(req.getSignPrice(),  BigDecimal.ZERO);
+        BigDecimal taxFactor = MapUtils.coalesce(req.getTaxFactor(),  BigDecimal.ZERO);
+        BigDecimal pl        = MapUtils.coalesce(req.getPl(),         BigDecimal.ONE);
+        BigDecimal weightPerUnit  = MapUtils.coalesce(req.getWeightPerUnit(),   BigDecimal.ZERO);
+        BigDecimal taxIco    = MapUtils.coalesce(req.getTaxIco(),     BigDecimal.ZERO);
 
         BigDecimal amount       = qty.multiply(signPrice).setScale(4, java.math.RoundingMode.HALF_UP);
         BigDecimal taxAmount    = qty.multiply(taxFactor).setScale(4, java.math.RoundingMode.HALF_UP);
-        BigDecimal weightResult = qty.multiply(weightEa).setScale(4, java.math.RoundingMode.HALF_UP);
-        BigDecimal palletxqty   = pl.compareTo(BigDecimal.ZERO) != 0
+        BigDecimal weightResult = qty.multiply(weightPerUnit).setScale(4, java.math.RoundingMode.HALF_UP);
+        BigDecimal palletQuantity   = pl.compareTo(BigDecimal.ZERO) != 0
                 ? qty.divide(pl, 4, java.math.RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
 
@@ -147,9 +148,9 @@ public class QuotationService {
                     QuotationItem newItem = QuotationItem.builder()
                             .quotation(quotation)
                             .productId(req.getProductId())
-                            .icomments("")
-                            .includepic(0)
-                            .variacion(0)
+                            .comment("")
+                            .includeImage(0)
+                            .priceVariation(0)
                             .build();
                     newItem.setTaxes(QuotationItemTaxes.builder().item(newItem).build());
                     newItem.setProduct(QuotationItemProduct.builder().item(newItem).build());
@@ -162,20 +163,20 @@ public class QuotationService {
         item.setAmount(amount);
 
         QuotationItemTaxes taxes = item.getTaxes();
-        taxes.setTaxPorcentaje(req.getTaxPorcentaje());
+        taxes.setTaxPercentage(req.getTaxPercentage());
         taxes.setTaxFactor(taxFactor);
         taxes.setTaxAmount(taxAmount);
         taxes.setTaxIco(taxIco);
-        taxes.setExcentPorcentaje(BigDecimal.ZERO);
-        taxes.setExcentAmount(BigDecimal.ZERO);
+        taxes.setExemptionPercentage(BigDecimal.ZERO);
+        taxes.setExemptionAmount(BigDecimal.ZERO);
 
         QuotationItemProduct product = item.getProduct();
         product.setDescription(req.getDescription());
-        product.setCuEa(req.getCuEa());
+        product.setPackSize(req.getPackSize());
         product.setPl(pl);
-        product.setWeightEa(weightEa);
+        product.setWeightPerUnit(weightPerUnit);
         product.setWeightResult(weightResult);
-        product.setPalletxqty(palletxqty);
+        product.setPalletQuantity(palletQuantity);
         product.setOnhand(req.getOnhand());
         product.setSoldByWeight(req.getSoldByWeight());
         product.setRecipe(req.getRecipe());
@@ -260,7 +261,7 @@ public class QuotationService {
             // Sum into an existing line, as legacy does for a repeated code.
             BigDecimal finalQty = quotationItemRepository
                     .findByQuotation_IdAndProductId(quotationId, code)
-                    .map(existing -> coalesce(existing.getQty(), BigDecimal.ZERO))
+                    .map(existing -> MapUtils.coalesce(existing.getQty(), BigDecimal.ZERO))
                     .orElse(BigDecimal.ZERO)
                     .add(qty);
 
@@ -285,12 +286,12 @@ public class QuotationService {
         req.setSignPrice(dec(c.get("sign_price")));
         // The catalog carries IVA and VAT side by side; whichever is populated
         // is the one that applies, matching what the single-add path sends.
-        req.setTaxPorcentaje(nonZero(dec(c.get("iva_Percent")), dec(c.get("vat_Percent"))));
+        req.setTaxPercentage(nonZero(dec(c.get("iva_Percent")), dec(c.get("vat_Percent"))));
         req.setTaxFactor(nonZero(dec(c.get("iva_Amount")), dec(c.get("vat_Amount"))));
         req.setTaxIco(dec(c.get("ico_Amount")));
-        req.setCuEa(dec(c.get("cu_EA")));
+        req.setPackSize(dec(c.get("cu_EA")));
         req.setPl(dec(c.get("pl")));
-        req.setWeightEa(dec(c.get("weight_EA_KG")));
+        req.setWeightPerUnit(dec(c.get("weight_EA_KG")));
         req.setOnhand(dec(c.get("quantityOnHand")));
         req.setSoldByWeight(str(c.get("soldByWeight")));
         req.setRecipe(str(c.get("recipe")));
@@ -354,21 +355,21 @@ public class QuotationService {
         // guard. Skipping it left the exempt amount stale after a qty edit.
         BigDecimal pct = body.get("exemp") != null
                 ? new BigDecimal(body.get("exemp").toString())
-                : (item.getTaxes() != null ? coalesce(item.getTaxes().getExcentPorcentaje(), BigDecimal.ZERO) : BigDecimal.ZERO);
+                : (item.getTaxes() != null ? MapUtils.coalesce(item.getTaxes().getExemptionPercentage(), BigDecimal.ZERO) : BigDecimal.ZERO);
         applyExemption(item, pct);
 
         // Item Info drawer: the per-item comment and the "include image in the
         // quote" flag. Both columns already existed and were read-only.
-        if (body.get("icomments") != null) {
-            String comment = body.get("icomments").toString();
+        if (body.get("comment") != null) {
+            String comment = body.get("comment").toString();
             // orders_item.icomments is VARCHAR(500); truncate rather than let
             // the driver reject the write.
-            item.setIcomments(comment.length() > 500 ? comment.substring(0, 500) : comment);
+            item.setComment(comment.length() > 500 ? comment.substring(0, 500) : comment);
         }
-        if (body.get("includepic") != null) {
-            Object raw = body.get("includepic");
+        if (body.get("includeImage") != null) {
+            Object raw = body.get("includeImage");
             boolean include = raw instanceof Boolean b ? b : !"0".equals(raw.toString()) && !"false".equalsIgnoreCase(raw.toString());
-            item.setIncludepic(include ? 1 : 0);
+            item.setIncludeImage(include ? 1 : 0);
         }
 
         QuotationItemResponse response = toItemResponse(quotationItemRepository.save(item));
@@ -378,8 +379,8 @@ public class QuotationService {
     }
 
     private void applyQty(QuotationItem item, BigDecimal newQty) {
-        BigDecimal signPrice = coalesce(item.getSignPrice(), BigDecimal.ZERO);
-        BigDecimal taxFactor = item.getTaxes() != null ? coalesce(item.getTaxes().getTaxFactor(), BigDecimal.ZERO) : BigDecimal.ZERO;
+        BigDecimal signPrice = MapUtils.coalesce(item.getSignPrice(), BigDecimal.ZERO);
+        BigDecimal taxFactor = item.getTaxes() != null ? MapUtils.coalesce(item.getTaxes().getTaxFactor(), BigDecimal.ZERO) : BigDecimal.ZERO;
 
         item.setQty(newQty);
         item.setAmount(newQty.multiply(signPrice).setScale(4, java.math.RoundingMode.HALF_UP));
@@ -388,10 +389,10 @@ public class QuotationService {
         }
 
         if (item.getProduct() != null) {
-            BigDecimal plVal = coalesce(item.getProduct().getPl(), BigDecimal.ONE);
-            BigDecimal weightEa = coalesce(item.getProduct().getWeightEa(), BigDecimal.ZERO);
-            item.getProduct().setWeightResult(newQty.multiply(weightEa).setScale(4, java.math.RoundingMode.HALF_UP));
-            item.getProduct().setPalletxqty(plVal.compareTo(BigDecimal.ZERO) != 0
+            BigDecimal plVal = MapUtils.coalesce(item.getProduct().getPl(), BigDecimal.ONE);
+            BigDecimal weightPerUnit = MapUtils.coalesce(item.getProduct().getWeightPerUnit(), BigDecimal.ZERO);
+            item.getProduct().setWeightResult(newQty.multiply(weightPerUnit).setScale(4, java.math.RoundingMode.HALF_UP));
+            item.getProduct().setPalletQuantity(plVal.compareTo(BigDecimal.ZERO) != 0
                     ? newQty.divide(plVal, 4, java.math.RoundingMode.HALF_UP)
                     : BigDecimal.ZERO);
         }
@@ -416,8 +417,8 @@ public class QuotationService {
     private void applyExemption(QuotationItem item, BigDecimal requested) {
         if (item.getTaxes() == null) return;
 
-        BigDecimal taxPct = coalesce(item.getTaxes().getTaxPorcentaje(), BigDecimal.ZERO);
-        BigDecimal taxAmount = coalesce(item.getTaxes().getTaxAmount(), BigDecimal.ZERO);
+        BigDecimal taxPct = MapUtils.coalesce(item.getTaxes().getTaxPercentage(), BigDecimal.ZERO);
+        BigDecimal taxAmount = MapUtils.coalesce(item.getTaxes().getTaxAmount(), BigDecimal.ZERO);
 
         // No tax on the line means there is nothing to exempt, so the percentage
         // is forced to zero rather than stored. Keeping a percentage against a
@@ -430,16 +431,16 @@ public class QuotationService {
             pct = taxPct;
         }
 
-        BigDecimal excentAmount = taxPct.compareTo(BigDecimal.ZERO) == 0
+        BigDecimal exemptionAmount = taxPct.compareTo(BigDecimal.ZERO) == 0
                 ? BigDecimal.ZERO
                 : pct.divide(taxPct, 10, java.math.RoundingMode.HALF_UP)
                      .multiply(taxAmount)
                      .setScale(2, java.math.RoundingMode.HALF_UP);
 
-        item.getTaxes().setExcentPorcentaje(pct);
-        item.getTaxes().setExcentAmount(excentAmount);
+        item.getTaxes().setExemptionPercentage(pct);
+        item.getTaxes().setExemptionAmount(exemptionAmount);
 
-        log.info("[QuotationService] updateItem id={} exemption={}% amount={}", item.getId(), pct, excentAmount);
+        log.info("[QuotationService] updateItem id={} exemption={}% amount={}", item.getId(), pct, exemptionAmount);
     }
 
     // ── Delete item ───────────────────────────────────────────────────────
@@ -524,16 +525,16 @@ public class QuotationService {
         List<QuotationItem> items = quotationItemRepository.findByQuotation_IdOrderByProductIdAsc(id);
 
         String membership = quotation.getCustomer() != null ? quotation.getCustomer().getCustomerMembership() : null;
-        Map<String, Object> context = omsService.getQuotationContext(id, quotation.getStoreId(), membership, quotation.getUserId());
-        Map<String, Object> payload = omsPayloadBuilder.build(quotation, items, context, req.getVentanas());
+        Map<String, Object> context = omsService.buildOmsContext(id, quotation.getStoreId(), membership, quotation.getUserId());
+        Map<String, Object> payload = omsPayloadBuilder.build(quotation, items, context, req.getDeliveryWindows());
 
         String token = getOmsToken();
 
         Map<String, Object> club = castMap(context.get("club"));
-        String paisIso2 = club != null ? str(club.get("pais_iso2"), "CR") : "CR";
+        String countryIso2 = club != null ? str(club.get("pais_iso2"), "CR") : "CR";
 
         long omsRequestedAt = System.currentTimeMillis();
-        String omsResponse = omsService.sendPayload(payload, paisIso2, token);
+        String omsResponse = omsService.submitOrder(payload, countryIso2, token);
         long omsElapsedMs  = System.currentTimeMillis() - omsRequestedAt;
 
         try {
@@ -544,14 +545,14 @@ public class QuotationService {
                 ensurePayment(quotation).setQuoteNo(orderId);
                 quotationRepository.save(quotation);
                 log.info("[OMS_SUBMIT] status=OK quoteId={} membership={} storeId={} country={} omsOrderId={} elapsedMs={}",
-                        id, membership, quotation.getStoreId(), paisIso2, orderId, omsElapsedMs);
+                        id, membership, quotation.getStoreId(), countryIso2, orderId, omsElapsedMs);
             } else {
                 log.warn("[OMS_SUBMIT] status=REJECTED quoteId={} membership={} storeId={} country={} elapsedMs={} response={}",
-                        id, membership, quotation.getStoreId(), paisIso2, omsElapsedMs, omsResponse);
+                        id, membership, quotation.getStoreId(), countryIso2, omsElapsedMs, omsResponse);
             }
         } catch (Exception e) {
             log.error("[OMS_SUBMIT] status=ERROR quoteId={} membership={} storeId={} country={} elapsedMs={} error={}",
-                    id, membership, quotation.getStoreId(), paisIso2, omsElapsedMs, e.getMessage());
+                    id, membership, quotation.getStoreId(), countryIso2, omsElapsedMs, e.getMessage());
         }
 
         return omsResponse;
@@ -576,18 +577,14 @@ public class QuotationService {
         return quotation.getPayment();
     }
 
-    private LocalDate parseExpiry(String dexpired) {
-        if (dexpired == null || dexpired.isBlank()) return LocalDate.now().plusDays(21);
+    private LocalDate parseExpiry(String expiryDate) {
+        if (expiryDate == null || expiryDate.isBlank()) return LocalDate.now().plusDays(21);
         try {
-            return LocalDate.parse(dexpired);
+            return LocalDate.parse(expiryDate);
         } catch (DateTimeParseException e) {
-            log.warn("[QuotationService] dexpired inválido '{}', usando +21 días", dexpired);
+            log.warn("[QuotationService] expiryDate inválido '{}', usando +21 días", expiryDate);
             return LocalDate.now().plusDays(21);
         }
-    }
-
-    private BigDecimal coalesce(BigDecimal value, BigDecimal fallback) {
-        return value != null ? value : fallback;
     }
 
     private String str(Object val, String def) {
@@ -614,7 +611,7 @@ public class QuotationService {
                 .userId(q.getUserId())
                 .statusId(q.getStatusId())
                 .dateTime(q.getDateTime())
-                .dexpired(q.getDexpired());
+                .expiryDate(q.getExpiryDate());
 
         if (c != null) {
             b.customerName(c.getCustomerName())
@@ -624,7 +621,7 @@ public class QuotationService {
 
         if (t != null) {
             b.taxRate(t.getTaxRate())
-             .aplicarImpuestos(t.getAplicarImpuestos())
+             .applyTaxes(t.getApplyTaxes())
              .excent(t.getExcent())
              .grossAmount(t.getGrossAmount())
              .netAmount(t.getNetAmount())
@@ -660,26 +657,26 @@ public class QuotationService {
                 .rate(i.getRate())
                 .signPrice(i.getSignPrice())
                 .amount(i.getAmount())
-                .icomments(i.getIcomments())
-                .includepic(i.getIncludepic())
-                .variacion(i.getVariacion());
+                .comment(i.getComment())
+                .includeImage(i.getIncludeImage())
+                .priceVariation(i.getPriceVariation());
 
         if (tx != null) {
-            b.taxPorcentaje(tx.getTaxPorcentaje())
+            b.taxPercentage(tx.getTaxPercentage())
              .taxFactor(tx.getTaxFactor())
              .taxAmount(tx.getTaxAmount())
              .taxIco(tx.getTaxIco())
-             .excentPorcentaje(tx.getExcentPorcentaje())
-             .excentAmount(tx.getExcentAmount());
+             .exemptionPercentage(tx.getExemptionPercentage())
+             .exemptionAmount(tx.getExemptionAmount());
         }
 
         if (pr != null) {
             b.description(pr.getDescription())
-             .cuEa(pr.getCuEa())
+             .packSize(pr.getPackSize())
              .pl(pr.getPl())
-             .weightEa(pr.getWeightEa())
+             .weightPerUnit(pr.getWeightPerUnit())
              .weightResult(pr.getWeightResult())
-             .palletxqty(pr.getPalletxqty())
+             .palletQuantity(pr.getPalletQuantity())
              .onhand(pr.getOnhand())
              .soldByWeight(pr.getSoldByWeight())
              .recipe(pr.getRecipe())

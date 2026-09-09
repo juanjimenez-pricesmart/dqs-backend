@@ -14,3 +14,6 @@
 - No JPA/Hibernate — all DB access via `JdbcTemplate`
 - All variables, methods, and code in English
 - `ClubCapabilities.java` is the source of truth for per-club feature flags — always check it before adding club/country-specific conditionals anywhere
+
+## Business rules
+- 

@@ -21,7 +21,7 @@ public class QuotationTotals {
     private BigDecimal taxRate;
 
     @Column(name = "aplicar_impuestos", columnDefinition = "TINYINT")
-    private Integer aplicarImpuestos;
+    private Integer applyTaxes;
 
     @Column(name = "excent", columnDefinition = "TINYINT")
     private Integer excent;

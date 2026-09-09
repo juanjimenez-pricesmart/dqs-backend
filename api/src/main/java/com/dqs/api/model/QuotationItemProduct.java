@@ -21,19 +21,19 @@ public class QuotationItemProduct {
     private String description;
 
     @Column(name = "cu_ea", precision = 10, scale = 4)
-    private BigDecimal cuEa;
+    private BigDecimal packSize;
 
     @Column(name = "pl", precision = 10, scale = 4)
     private BigDecimal pl;
 
     @Column(name = "weight_ea", precision = 10, scale = 4)
-    private BigDecimal weightEa;
+    private BigDecimal weightPerUnit;
 
     @Column(name = "weight_result", precision = 15, scale = 4)
     private BigDecimal weightResult;
 
     @Column(name = "palletxqty", precision = 10, scale = 4)
-    private BigDecimal palletxqty;
+    private BigDecimal palletQuantity;
 
     @Column(name = "onhand", precision = 10, scale = 2)
     private BigDecimal onhand;

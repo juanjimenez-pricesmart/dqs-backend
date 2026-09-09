@@ -129,7 +129,7 @@ public class DeliveryService {
             .qty(qty)
             .rate(signPrice)
             .signPrice(signPrice)
-            .taxPorcentaje(BigDecimal.ZERO)
+            .taxPercentage(BigDecimal.ZERO)
             .taxFactor(BigDecimal.ZERO)
             .taxIco(BigDecimal.ZERO)
             .build();
@@ -231,7 +231,7 @@ public class DeliveryService {
         // city_id, not city_code: the panel reads back what it sent.
         m.put("city_id",       d.getCityCode());
         m.put("city_name",     d.getCityName());
-        m.put("logcargueid",   d.getLogCargueId());
+        m.put("logcargueid",   d.getLoadLogId());
         m.put("created_at",    d.getCreatedAt() != null ? d.getCreatedAt().toString() : null);
         m.put("updated_at",    d.getUpdatedAt() != null ? d.getUpdatedAt().toString() : null);
         return m;
