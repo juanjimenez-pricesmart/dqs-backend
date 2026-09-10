@@ -29,7 +29,6 @@ public class OmsPayloadBuilder {
         Map<String, Object> user    = castMap(context.get("user"));
         Map<String, Object> fel     = context.get("fel") != null ? castMap(context.get("fel")) : null;
 
-        double exchangeRate  = toDouble(context.get("exchange_rate"), 1.0);
         String currency      = str(club.get("moneda"),              "USD");
         String language      = str(club.get("idioma"),              "es");
         String countryIso2   = str(club.get("pais_iso2"),           "CR");
@@ -285,10 +284,11 @@ public class OmsPayloadBuilder {
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
+    /** No null guard: every call site passes a number, a boolean, or a string with a default behind it. */
     private Map<String, Object> attr(String name, Object value) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("AttributeName",  name);
-        m.put("AttributeValue", value != null ? value : "");
+        m.put("AttributeValue", value);
         return m;
     }
 
@@ -304,10 +304,9 @@ public class OmsPayloadBuilder {
                 .doubleValue();
     }
 
-    private double toDouble(Object val, double def) {
-        if (val == null) return def;
-        try { return Double.parseDouble(val.toString()); }
-        catch (Exception e) { return def; }
+    /** Every caller reads a BigDecimal column, so there is nothing to parse. */
+    private double toDouble(java.math.BigDecimal val, double def) {
+        return val != null ? val.doubleValue() : def;
     }
 
     private String str(Object val, String def) {
