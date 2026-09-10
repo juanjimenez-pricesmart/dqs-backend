@@ -85,6 +85,12 @@ public class DeliveryService {
         Long quotationId = toLong(data.get("quotation_id"));
         log.info("[DeliveryService] saveDelivery quotationId={}", quotationId);
 
+        // Without it the row is built against a null quotation and the failure
+        // surfaces as a constraint violation at commit, far from the cause.
+        if (quotationId == null) {
+            throw new IllegalArgumentException("quotation_id is required to save a delivery");
+        }
+
         // The client sends qty and sign_price; amount is always derived here
         // so a client cannot store a total that disagrees with its parts.
         BigDecimal qty       = toDecimal(data.get("qty"),        BigDecimal.ONE);
