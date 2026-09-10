@@ -37,6 +37,7 @@ public class QuotationService {
     private final OmsPayloadBuilder omsPayloadBuilder;
     private final ObjectMapper objectMapper;
     private final ItemService itemService;
+    private final QuotationTotalsCalculator totalsCalculator;
 
     @Value("${idp.base-url}")
     private String idpBaseUrl;
@@ -185,6 +186,8 @@ public class QuotationService {
 
         QuotationItem saved = quotationItemRepository.save(item);
         log.info("[QuotationService] item saved id={} quotation_id={} product_id={}", saved.getId(), quotationId, saved.getProductId());
+        // The lines changed, so the totals are stale by definition.
+        totalsCalculator.recalculateFor(quotationId);
         return toItemResponse(saved);
     }
 
@@ -267,6 +270,8 @@ public class QuotationService {
 
         log.info("[QuotationService] addItemsBulk quotation_id={} added={} notFound={} skipped={}",
                 quotationId, added.size(), notFound.size(), skipped.size());
+        // The lines changed, so the totals are stale by definition.
+        totalsCalculator.recalculateFor(quotationId);
         return java.util.Map.of("added", added, "notFound", notFound, "skipped", skipped);
     }
 
@@ -365,7 +370,10 @@ public class QuotationService {
             item.setIncludepic(include ? 1 : 0);
         }
 
-        return toItemResponse(quotationItemRepository.save(item));
+        QuotationItemResponse response = toItemResponse(quotationItemRepository.save(item));
+        // The lines changed, so the totals are stale by definition.
+        totalsCalculator.recalculateFor(quotationId);
+        return response;
     }
 
     private void applyQty(QuotationItem item, BigDecimal newQty) {
@@ -445,6 +453,8 @@ public class QuotationService {
         }
         quotationItemRepository.deleteById(itemId);
         log.info("[QuotationService] item deleted id={} quotation_id={}", itemId, quotationId);
+        // The lines changed, so the totals are stale by definition.
+        totalsCalculator.recalculateFor(quotationId);
     }
 
     // ── Cancel quotation (pending only) ───────────────────────────────────
