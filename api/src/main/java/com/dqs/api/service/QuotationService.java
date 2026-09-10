@@ -308,8 +308,9 @@ public class QuotationService {
         try { return new BigDecimal(o.toString()); } catch (NumberFormatException e) { return BigDecimal.ZERO; }
     }
 
+    /** Both call sites pass dec(), which answers ZERO for a missing column, so there is no null to guard against. */
     private static BigDecimal nonZero(BigDecimal a, BigDecimal b) {
-        return a != null && a.compareTo(BigDecimal.ZERO) != 0 ? a : b;
+        return a.compareTo(BigDecimal.ZERO) != 0 ? a : b;
     }
 
     // ── Update item qty ───────────────────────────────────────────────────
