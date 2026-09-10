@@ -316,8 +316,8 @@ public class QuotePdfService {
         return rows.isEmpty() ? Map.of() : rows.get(0);
     }
 
+    /** No null guard: str() answers "" for a missing column, and equalsIgnoreCase(null) is false anyway. */
     private boolean isFelCountry(String iso) {
-        if (iso == null) return false;
         for (String c : FEL_COUNTRIES) if (c.equalsIgnoreCase(iso)) return true;
         return false;
     }

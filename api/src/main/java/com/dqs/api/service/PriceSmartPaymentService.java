@@ -260,12 +260,23 @@ public class PriceSmartPaymentService {
         return conn;
     }
 
+    /**
+     * The answer as a map, or the body under `raw` when it is not JSON.
+     *
+     * Mutable on purpose: createPaymentRequest adds the iframe URL and the
+     * invoice number to whatever comes back. Map.of here made a non-JSON answer
+     * — a proxy's HTML error page, say — throw UnsupportedOperationException on
+     * the next line, so the attempt was never recorded and the invoice could
+     * not be traced back to its quotation.
+     */
     @SuppressWarnings("unchecked")
     private Map<String, Object> parseJson(String json) {
         try {
-            return objectMapper.readValue(json, Map.class);
+            return new HashMap<>(objectMapper.readValue(json, Map.class));
         } catch (Exception e) {
-            return Map.of("raw", json);
+            Map<String, Object> raw = new HashMap<>();
+            raw.put("raw", json);
+            return raw;
         }
     }
 
