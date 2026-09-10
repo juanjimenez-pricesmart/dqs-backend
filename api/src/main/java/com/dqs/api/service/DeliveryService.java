@@ -52,6 +52,7 @@ public class DeliveryService {
     private final BusinessApiClient businessApiClient;
     private final ObjectMapper objectMapper;
     private final CatalogSource catalogSource;
+    private final QuotationTotalsCalculator totalsCalculator;
     private final QuotationService quotationService;
     private final QuotationDeliveryRepository deliveryRepository;
     private final QuotationRepository quotationRepository;
@@ -128,6 +129,10 @@ public class DeliveryService {
             .build();
         quotationService.saveItem(quotationId, itemReq);
 
+        // The delivery amount is part of the quote total, and its 888905 line
+        // has just moved too.
+        totalsCalculator.recalculateFor(quotationId);
+
         log.info("[DeliveryService] saveDelivery OK quotationId={} amount={}", quotationId, amount);
         return true;
     }
@@ -183,6 +188,10 @@ public class DeliveryService {
             .forEach(itemId -> quotationService.deleteItem(quotationId, itemId));
 
         deliveryRepository.deleteByQuotation_Id(quotationId);
+
+        // After the row is gone, not before: deleteItem above already
+        // recalculated, but at that point the delivery amount was still there.
+        totalsCalculator.recalculateFor(quotationId);
         return true;
     }
 
