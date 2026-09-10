@@ -30,8 +30,10 @@ public class ItemService {
             Map<String, Object> item;
             if (trimmed.startsWith("[")) {
                 // Business API returns an array for some items — take the first element
+                // Jackson answers a `[`-prefixed body with an array or throws, so the
+                // only empty case worth checking is a zero-length one.
                 Map<String, Object>[] arr = objectMapper.readValue(trimmed, Map[].class);
-                if (arr == null || arr.length == 0) {
+                if (arr.length == 0) {
                     throw new RuntimeException("Item not found: " + itemCode);
                 }
                 item = arr[0];
@@ -97,8 +99,7 @@ public class ItemService {
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> quantityRows(String body, String itemCode) throws Exception {
         if (body.startsWith("[")) {
-            Map<String, Object>[] arr = objectMapper.readValue(body, Map[].class);
-            return arr == null ? List.of() : Arrays.asList(arr);
+            return Arrays.asList(objectMapper.readValue(body, Map[].class));
         }
         Map<String, Object> payload = objectMapper.readValue(body, Map.class);
         Object rows = payload.get("listQuantityCountry");
