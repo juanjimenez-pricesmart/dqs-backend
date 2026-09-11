@@ -156,6 +156,17 @@ public class QuotationController {
         return ResponseEntity.noContent().build();
     }
 
+    @Operation(summary = "Extender fecha de expiración",
+               description = "Suma 21 días a la fecha de expiración que ya tiene la cotización, no a hoy — " +
+                             "llamarlo dos veces suma 42. Equivale a orders/extenderfecha del legacy: sin tope, " +
+                             "sin validar el estado y sin bitácora. Una cotización sin fecha queda en hoy + 21.")
+    @PatchMapping("/{id}/extend-expiry")
+    public ResponseEntity<QuotationResponse> extendExpiry(
+            @Parameter(description = "ID de la cotización") @PathVariable Long id) {
+        log.info("[QuotationController] PATCH /api/v1/quotations/{}/extend-expiry", id);
+        return ResponseEntity.ok(quotationService.extendExpiry(id));
+    }
+
     @Operation(summary = "Listar ítems", description = "Retorna todos los ítems de la cotización ordenados por productId")
     @GetMapping("/{id}/items")
     public ResponseEntity<List<QuotationItemResponse>> getItems(

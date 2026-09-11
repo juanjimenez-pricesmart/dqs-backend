@@ -1535,4 +1535,69 @@ class QuotationServiceTest {
                 .hasMessageContaining("Error obteniendo token OMS");
         verify(omsService, never()).getOrderStatusHistory(anyString(), anyString());
     }
+
+    // ── Extender fecha ────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("extending adds 21 days to the date already on the quote, not to today")
+    void extendingAddsToTheDateOnTheQuote() {
+        Quotation q = quotation(1);                       // expires 2026-10-01
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(q));
+        when(quotationRepository.save(any(Quotation.class))).thenAnswer(i -> i.getArgument(0));
+
+        QuotationResponse response = service().extendExpiry(107L);
+
+        assertThat(response.getExpiryDate()).isEqualTo(LocalDate.of(2026, 10, 22));
+        ArgumentCaptor<Quotation> saved = ArgumentCaptor.forClass(Quotation.class);
+        verify(quotationRepository).save(saved.capture());
+        assertThat(saved.getValue().getExpiryDate()).isEqualTo(LocalDate.of(2026, 10, 22));
+    }
+
+    @Test
+    @DisplayName("pressing it twice gives 42 days, and an expired quote extends from when it expired")
+    void extensionsStackAndDoNotReviveFromToday() {
+        Quotation q = quotation(1);
+        q.setExpiryDate(LocalDate.of(2020, 1, 1));        // lapsed years ago
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(q));
+        when(quotationRepository.save(any(Quotation.class))).thenAnswer(i -> i.getArgument(0));
+
+        assertThat(service().extendExpiry(107L).getExpiryDate()).isEqualTo(LocalDate.of(2020, 1, 22));
+        assertThat(service().extendExpiry(107L).getExpiryDate()).isEqualTo(LocalDate.of(2020, 2, 12));
+
+        // Legacy's DATE_ADD does exactly this. The button does not un-expire a
+        // quotation; it is for pushing out one that is about to lapse.
+    }
+
+    @Test
+    @DisplayName("a quote with no expiry at all lands on today plus 21 rather than staying blank")
+    void aQuoteWithNoExpiryGetsOneFromToday() {
+        Quotation q = quotation(1);
+        q.setExpiryDate(null);
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(q));
+        when(quotationRepository.save(any(Quotation.class))).thenAnswer(i -> i.getArgument(0));
+
+        // MySQL's DATE_ADD(NULL, ...) is NULL, so legacy blanks the field here.
+        assertThat(service().extendExpiry(107L).getExpiryDate())
+                .isEqualTo(LocalDate.now().plusDays(21));
+    }
+
+    @Test
+    @DisplayName("extending works whatever the status — legacy never checks it either")
+    void extendingIgnoresTheStatus() {
+        Quotation closed = quotation(3);
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(closed));
+        when(quotationRepository.save(any(Quotation.class))).thenAnswer(i -> i.getArgument(0));
+
+        assertThat(service().extendExpiry(107L).getExpiryDate()).isEqualTo(LocalDate.of(2026, 10, 22));
+    }
+
+    @Test
+    @DisplayName("extending a quotation that does not exist is a 404, not a silent no-op")
+    void extendingAMissingQuotationThrows() {
+        when(quotationRepository.findById(404L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service().extendExpiry(404L))
+                .isInstanceOf(QuotationNotFoundException.class);
+        verify(quotationRepository, never()).save(any(Quotation.class));
+    }
 }
