@@ -3,6 +3,8 @@ package com.dqs.api.service;
 import com.dqs.api.dto.QuotationItemResponse;
 import com.dqs.api.dto.QuotationResponse;
 import com.dqs.api.repository.support.NativeQueries;
+import com.dqs.api.util.ClubMarketingFooter;
+import com.dqs.api.util.QuoteItemSort;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -10,6 +12,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.context.MessageSource;
+import org.springframework.context.support.ResourceBundleMessageSource;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -49,7 +53,23 @@ class QuotePdfServiceTest {
     @Mock private NativeQueries nativeQueries;
 
     private QuotePdfService service() {
-        return new QuotePdfService(quotationService, fiscalService, deliveryService, nativeQueries);
+        return new QuotePdfService(quotationService, fiscalService, deliveryService, nativeQueries, MESSAGES);
+    }
+
+    /**
+     * The real bundles rather than a mock, so a footer key that goes missing or
+     * loses its accents fails here instead of in a customer's PDF. Configured
+     * the way application.properties configures Boot's own: no fallback to the
+     * machine's locale, which would otherwise decide the wording.
+     */
+    private static final MessageSource MESSAGES = messageSource();
+
+    private static MessageSource messageSource() {
+        ResourceBundleMessageSource source = new ResourceBundleMessageSource();
+        source.setBasename("messages");
+        source.setDefaultEncoding("UTF-8");
+        source.setFallbackToSystemLocale(false);
+        return source;
     }
 
     /** A 1x1 transparent PNG, so the renderer has something real to resolve. */
@@ -454,5 +474,128 @@ class QuotePdfServiceTest {
 
         assertThatThrownBy(() -> service().generate(404L))
                 .isInstanceOf(com.dqs.api.exception.QuotationNotFoundException.class);
+    }
+
+    // ── Line order: legacy's four "Ordenar por" radios ────────────────────
+
+    /** Three lines whose four sortable columns each put them in a different order. */
+    private List<QuotationItemResponse> scrambled() {
+        return List.of(
+            QuotationItemResponse.builder().id(1L).quotationId(107L)
+                .productId("3003").description("ARROZ").department("20").category("2002")
+                .qty(BigDecimal.ONE).rate(BigDecimal.TEN).amount(BigDecimal.TEN).build(),
+            QuotationItemResponse.builder().id(2L).quotationId(107L)
+                .productId("1001").description("ZANAHORIA").department("30").category("1001")
+                .qty(BigDecimal.ONE).rate(BigDecimal.TEN).amount(BigDecimal.TEN).build(),
+            QuotationItemResponse.builder().id(3L).quotationId(107L)
+                .productId("2002").description("MANGO").department("10").category("3003")
+                .qty(BigDecimal.ONE).rate(BigDecimal.TEN).amount(BigDecimal.TEN).build());
+    }
+
+    private List<String> codesAfter(Integer sortBy) {
+        return QuoteItemSort.fromCode(sortBy).sort(scrambled()).stream()
+            .map(QuotationItemResponse::getProductId)
+            .toList();
+    }
+
+    @Test
+    @DisplayName("each radio orders the lines by its own column")
+    void eachRadioOrdersByItsOwnColumn() {
+        assertThat(codesAfter(1)).containsExactly("2002", "3003", "1001"); // department 10, 20, 30
+        assertThat(codesAfter(2)).containsExactly("1001", "3003", "2002"); // category   1001, 2002, 3003
+        assertThat(codesAfter(3)).containsExactly("1001", "2002", "3003"); // code
+        assertThat(codesAfter(4)).containsExactly("3003", "2002", "1001"); // ARROZ, MANGO, ZANAHORIA
+    }
+
+    @Test
+    @DisplayName("no sort means department, but an unknown sort means code")
+    void theTwoLegacyDefaultsAreNotTheSameValue() {
+        // printDiv defaults $sortby to 1, and the edit screen starts on that
+        // radio; the switch inside the query defaults to product_id instead.
+        assertThat(codesAfter(null)).isEqualTo(codesAfter(1));
+        assertThat(codesAfter(7)).isEqualTo(codesAfter(3));
+        assertThat(codesAfter(0)).isEqualTo(codesAfter(3));
+    }
+
+    @Test
+    @DisplayName("a line missing the column it is sorted on goes first rather than throwing")
+    void aLineMissingItsSortColumnGoesFirst() throws Exception {
+        QuotationItemResponse noDept = line("1001");
+        noDept.setDepartment(null);
+        assertThat(QuoteItemSort.fromCode(1).sort(List.of(line("2002"), noDept)))
+            .first().isSameAs(noDept);
+
+        stub(6401, "CR", "CRC", List.of(line("2002"), noDept), null, null);
+        assertIsPdf(service().generate(107L, 1));
+    }
+
+    // ── The marketing footer ──────────────────────────────────────────────
+
+    /** One line large enough to clear any club threshold in the table. */
+    private QuotationItemResponse hugeLine() {
+        return QuotationItemResponse.builder()
+            .id(500L).quotationId(107L).productId("1001").description("ARROZ 5KG")
+            .qty(BigDecimal.ONE).rate(new BigDecimal("9000000")).amount(new BigDecimal("9000000"))
+            .taxAmount(BigDecimal.ZERO).build();
+    }
+
+    @Test
+    @DisplayName("a quote under its club threshold carries the footer, one over it does not")
+    void theFooterIsForSmallQuotesOnly() throws Exception {
+        stub(6401, "CR", "CRC", List.of(line("1001")), null, null);
+        int small = generate().length;
+
+        stub(6401, "CR", "CRC", List.of(hugeLine()), null, null);
+
+        // Costa Rica's threshold is 250,000 CRC. The larger quote renders more
+        // digits and still has to come out shorter, because it lost the footer.
+        assertThat(generate().length).isLessThan(small);
+    }
+
+    @Test
+    @DisplayName("the threshold includes its own value")
+    void theThresholdIsInclusive() {
+        // Legacy compares netAmount <= threshold, and #net_amount holds the
+        // final total. A quote landing exactly on the number still gets it.
+        assertThat(ClubMarketingFooter.printsFooter(6401, new BigDecimal("250000"))).isTrue();
+        assertThat(ClubMarketingFooter.printsFooter(6401, new BigDecimal("250000.01"))).isFalse();
+    }
+
+    @Test
+    @DisplayName("clubs addressed by id beat the ranges they sit inside")
+    void explicitClubIdsWinOverRanges() {
+        // 6701-6704 are El Salvador's Callejas clubs, threshold 500 — they are
+        // not in ClubCapabilities' 6500-6599 range and would otherwise resolve
+        // to nothing at all.
+        assertThat(ClubMarketingFooter.printsFooter(6701, new BigDecimal("500"))).isTrue();
+        assertThat(ClubMarketingFooter.printsFooter(6701, new BigDecimal("501"))).isFalse();
+        assertThat(ClubMarketingFooter.printsFooter(6601, new BigDecimal("13000"))).isTrue();
+    }
+
+    @Test
+    @DisplayName("a club with no threshold never prints the footer, however small the quote")
+    void clubsWithoutAThresholdNeverPrintIt() {
+        // 6801 is on the Dominican list; 6803 is not, so it falls into the
+        // Ecuador range that is tested first and has no threshold. Production
+        // behaves this way today — see ClubMarketingFooter.
+        assertThat(ClubMarketingFooter.printsFooter(6801, BigDecimal.ONE)).isTrue();
+        assertThat(ClubMarketingFooter.printsFooter(6803, BigDecimal.ONE)).isFalse();
+        assertThat(ClubMarketingFooter.printsFooter(9001, BigDecimal.ONE)).isFalse();  // Peru
+        assertThat(ClubMarketingFooter.printsFooter(1234, BigDecimal.ONE)).isFalse();  // no club at all
+    }
+
+    @Test
+    @DisplayName("the club decides the footer's language, and Costa Rica and Nicaragua get voseo")
+    void theClubDecidesTheWording() {
+        assertThat(footerPart2(6101)).contains("Accede a");      // Colombia, standard Spanish
+        assertThat(footerPart2(6401)).contains("Accedé a");      // Costa Rica, voseo
+        assertThat(footerPart2(8901)).contains("Accedé a");      // Nicaragua, voseo
+        assertThat(footerPart2(8501)).contains("where you can"); // Barbados, English
+        assertThat(footerPart2(1234)).contains("where you can"); // unknown club falls back to English
+    }
+
+    private String footerPart2(int storeId) {
+        return MESSAGES.getMessage("quote.footer.marketing.part2", null,
+            ClubMarketingFooter.localeFor(storeId));
     }
 }
