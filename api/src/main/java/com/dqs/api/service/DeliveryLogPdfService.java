@@ -1,5 +1,6 @@
 package com.dqs.api.service;
 
+import com.dqs.api.util.MapUtils;
 import com.itextpdf.html2pdf.HtmlConverter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -90,7 +91,7 @@ public class DeliveryLogPdfService {
         html.append("  </div>\n");
         html.append("  <div class='info-box'>\n");
         html.append("    <div class='info-label'>STATUS</div>\n");
-        html.append("    <div class='info-value'>").append(statusLabel(toInt(log.get("statusid")))).append("</div>\n");
+        html.append("    <div class='info-value'>").append(statusLabel(MapUtils.toInt(log.get("statusid")))).append("</div>\n");
         html.append("  </div>\n");
         html.append("</div>\n");
 
@@ -112,7 +113,7 @@ public class DeliveryLogPdfService {
         double totalAmount = 0;
         int index = 1;
         for (Map<String, Object> d : deliveries) {
-            double amount = toDouble(d.get("amount"));
+            double amount = MapUtils.toDouble(d.get("amount"));
             totalAmount += amount;
 
             html.append("    <tr>\n");
@@ -165,15 +166,4 @@ public class DeliveryLogPdfService {
         };
     }
 
-    private int toInt(Object v) {
-        if (v == null) return 0;
-        if (v instanceof Number) return ((Number) v).intValue();
-        return Integer.parseInt(v.toString());
-    }
-
-    private double toDouble(Object v) {
-        if (v == null) return 0;
-        if (v instanceof Number) return ((Number) v).doubleValue();
-        return Double.parseDouble(v.toString());
-    }
 }

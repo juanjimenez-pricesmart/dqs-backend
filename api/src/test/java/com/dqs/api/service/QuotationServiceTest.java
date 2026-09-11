@@ -154,13 +154,13 @@ class QuotationServiceTest {
 
     private Quotation quotation(int statusId) {
         Quotation q = Quotation.builder().id(107L).storeId(3).userId(1).statusId(statusId)
-                .dexpired(LocalDate.of(2026, 10, 1)).build();
+                .expiryDate(LocalDate.of(2026, 10, 1)).build();
         q.setCustomer(QuotationCustomer.builder().quotation(q)
                 .customerName("ACME").customerMembership("70012345").customerBusiness("ACME SA").build());
         q.setTotals(QuotationTotals.builder().quotation(q)
                 .grossAmount(new BigDecimal("1000.00")).netAmount(new BigDecimal("1190.00"))
                 .deliveryAmount(new BigDecimal("50.00")).excent(0).taxRate(new BigDecimal("19"))
-                .aplicarImpuestos(1).discount(BigDecimal.ZERO).vatChargeRate(BigDecimal.ZERO)
+                .applyTaxes(1).discount(BigDecimal.ZERO).vatChargeRate(BigDecimal.ZERO)
                 .vatCharge(BigDecimal.ZERO).serviceChargeRate(BigDecimal.ZERO)
                 .serviceCharge(BigDecimal.ZERO).build());
         return q;
@@ -170,13 +170,13 @@ class QuotationServiceTest {
         QuotationItem it = QuotationItem.builder().id(id).quotation(q).productId(code)
                 .qty(new BigDecimal("2")).rate(new BigDecimal("100"))
                 .signPrice(new BigDecimal("100")).amount(new BigDecimal("200"))
-                .icomments("").includepic(0).variacion(0).build();
+                .comment("").includeImage(0).priceVariation(0).build();
         it.setTaxes(QuotationItemTaxes.builder().item(it)
-                .taxPorcentaje(new BigDecimal("19")).taxFactor(new BigDecimal("19"))
+                .taxPercentage(new BigDecimal("19")).taxFactor(new BigDecimal("19"))
                 .taxAmount(new BigDecimal("38")).taxIco(BigDecimal.ZERO)
-                .excentPorcentaje(BigDecimal.ZERO).excentAmount(BigDecimal.ZERO).build());
+                .exemptionPercentage(BigDecimal.ZERO).exemptionAmount(BigDecimal.ZERO).build());
         it.setProduct(QuotationItemProduct.builder().item(it)
-                .description("ARROZ 5KG").pl(new BigDecimal("10")).weightEa(new BigDecimal("1.5"))
+                .description("ARROZ 5KG").pl(new BigDecimal("10")).weightPerUnit(new BigDecimal("1.5"))
                 .onhand(new BigDecimal("40")).build());
         return it;
     }
@@ -250,11 +250,11 @@ class QuotationServiceTest {
     void createHonoursExplicitExpiry() {
         repoReturnsSelf();
         CreateQuotationRequest req = createRequest();
-        req.setDexpired("2026-12-24");
+        req.setExpiryDate("2026-12-24");
 
         service().createQuotation(req);
 
-        assertThat(captureSaved().getDexpired()).isEqualTo(LocalDate.of(2026, 12, 24));
+        assertThat(captureSaved().getExpiryDate()).isEqualTo(LocalDate.of(2026, 12, 24));
     }
 
     @Test
@@ -264,7 +264,7 @@ class QuotationServiceTest {
 
         service().createQuotation(createRequest());
 
-        assertThat(captureSaved().getDexpired()).isEqualTo(LocalDate.now().plusDays(21));
+        assertThat(captureSaved().getExpiryDate()).isEqualTo(LocalDate.now().plusDays(21));
     }
 
     @Test
@@ -272,11 +272,11 @@ class QuotationServiceTest {
     void createDefaultsExpiryWhenBlank() {
         repoReturnsSelf();
         CreateQuotationRequest req = createRequest();
-        req.setDexpired("   ");
+        req.setExpiryDate("   ");
 
         service().createQuotation(req);
 
-        assertThat(captureSaved().getDexpired()).isEqualTo(LocalDate.now().plusDays(21));
+        assertThat(captureSaved().getExpiryDate()).isEqualTo(LocalDate.now().plusDays(21));
     }
 
     @Test
@@ -284,11 +284,11 @@ class QuotationServiceTest {
     void createDefaultsExpiryWhenUnparseable() {
         repoReturnsSelf();
         CreateQuotationRequest req = createRequest();
-        req.setDexpired("24/12/2026");
+        req.setExpiryDate("24/12/2026");
 
         service().createQuotation(req);
 
-        assertThat(captureSaved().getDexpired()).isEqualTo(LocalDate.now().plusDays(21));
+        assertThat(captureSaved().getExpiryDate()).isEqualTo(LocalDate.now().plusDays(21));
     }
 
     // ── getById ───────────────────────────────────────────────────────────
@@ -405,11 +405,11 @@ class QuotationServiceTest {
         req.setQty(new BigDecimal("3"));
         req.setRate(new BigDecimal("100"));
         req.setSignPrice(new BigDecimal("100"));
-        req.setTaxPorcentaje(new BigDecimal("19"));
+        req.setTaxPercentage(new BigDecimal("19"));
         req.setTaxFactor(new BigDecimal("19"));
         req.setTaxIco(new BigDecimal("2"));
         req.setPl(new BigDecimal("10"));
-        req.setWeightEa(new BigDecimal("1.5"));
+        req.setWeightPerUnit(new BigDecimal("1.5"));
         req.setOnhand(new BigDecimal("40"));
         return req;
     }
@@ -431,9 +431,9 @@ class QuotationServiceTest {
         assertThat(saved.getAmount()).isEqualByComparingTo("300");
         assertThat(saved.getTaxes().getTaxAmount()).isEqualByComparingTo("57");
         assertThat(saved.getProduct().getWeightResult()).isEqualByComparingTo("4.5");
-        assertThat(saved.getProduct().getPalletxqty()).isEqualByComparingTo("0.3");
-        assertThat(saved.getIcomments()).isEmpty();
-        assertThat(saved.getIncludepic()).isZero();
+        assertThat(saved.getProduct().getPalletQuantity()).isEqualByComparingTo("0.3");
+        assertThat(saved.getComment()).isEmpty();
+        assertThat(saved.getIncludeImage()).isZero();
         assertThat(response.getDescription()).isEqualTo("ARROZ 5KG");
     }
 
@@ -467,7 +467,7 @@ class QuotationServiceTest {
         req.setSignPrice(null);
         req.setTaxFactor(null);
         req.setPl(null);
-        req.setWeightEa(null);
+        req.setWeightPerUnit(null);
         req.setTaxIco(null);
 
         service().saveItem(107L, req);
@@ -478,7 +478,7 @@ class QuotationServiceTest {
         assertThat(saved.getTaxes().getTaxIco()).isEqualByComparingTo("0");
         // pl falls back to one, so the division is defined and yields the qty.
         assertThat(saved.getProduct().getPl()).isEqualByComparingTo("1");
-        assertThat(saved.getProduct().getPalletxqty()).isEqualByComparingTo("0");
+        assertThat(saved.getProduct().getPalletQuantity()).isEqualByComparingTo("0");
     }
 
     @Test
@@ -493,7 +493,7 @@ class QuotationServiceTest {
 
         service().saveItem(107L, req);
 
-        assertThat(captureSavedItem().getProduct().getPalletxqty()).isEqualByComparingTo("0");
+        assertThat(captureSavedItem().getProduct().getPalletQuantity()).isEqualByComparingTo("0");
     }
 
     @Test
@@ -501,15 +501,15 @@ class QuotationServiceTest {
     void saveItemResetsExemption() {
         Quotation q = quotation(1);
         QuotationItem existing = item(q, 500L, "1001");
-        existing.getTaxes().setExcentPorcentaje(new BigDecimal("19"));
-        existing.getTaxes().setExcentAmount(new BigDecimal("38"));
+        existing.getTaxes().setExemptionPercentage(new BigDecimal("19"));
+        existing.getTaxes().setExemptionAmount(new BigDecimal("38"));
         when(quotationRepository.findById(107L)).thenReturn(Optional.of(q));
         when(quotationItemRepository.findByQuotation_IdAndProductId(107L, "1001")).thenReturn(Optional.of(existing));
         repoReturnsSelf();
 
         service().saveItem(107L, itemRequest("1001"));
 
-        assertThat(captureSavedItem().getTaxes().getExcentAmount()).isEqualByComparingTo("0");
+        assertThat(captureSavedItem().getTaxes().getExemptionAmount()).isEqualByComparingTo("0");
     }
 
     @Test
@@ -604,7 +604,7 @@ class QuotationServiceTest {
         assertThat(saved.getProduct().getDescription()).isEqualTo("ARROZ 5KG");
         assertThat(saved.getProduct().getPicture1()).isEqualTo("arroz.jpg");
         assertThat(saved.getProduct().getStorageType()).isEqualTo("DRY");
-        assertThat(saved.getTaxes().getTaxPorcentaje()).isEqualByComparingTo("19");
+        assertThat(saved.getTaxes().getTaxPercentage()).isEqualByComparingTo("19");
         assertThat(saved.getQty()).isEqualByComparingTo("2");
     }
 
@@ -622,7 +622,7 @@ class QuotationServiceTest {
         service().addItemsBulk(107L, 3, List.of(line("1001", "1")));
 
         QuotationItem saved = captureSavedItem();
-        assertThat(saved.getTaxes().getTaxPorcentaje()).isEqualByComparingTo("15");
+        assertThat(saved.getTaxes().getTaxPercentage()).isEqualByComparingTo("15");
         assertThat(saved.getTaxes().getTaxFactor()).isEqualByComparingTo("15");
     }
 
@@ -637,7 +637,7 @@ class QuotationServiceTest {
 
         service().addItemsBulk(107L, 3, List.of(line("1001", "1")));
 
-        assertThat(captureSavedItem().getTaxes().getTaxPorcentaje()).isEqualByComparingTo("0");
+        assertThat(captureSavedItem().getTaxes().getTaxPercentage()).isEqualByComparingTo("0");
     }
 
     @Test
@@ -822,7 +822,7 @@ class QuotationServiceTest {
         assertThat(it.getAmount()).isEqualByComparingTo("500");
         assertThat(it.getTaxes().getTaxAmount()).isEqualByComparingTo("95");
         assertThat(it.getProduct().getWeightResult()).isEqualByComparingTo("7.5");
-        assertThat(it.getProduct().getPalletxqty()).isEqualByComparingTo("0.5");
+        assertThat(it.getProduct().getPalletQuantity()).isEqualByComparingTo("0.5");
     }
 
     @Test
@@ -850,14 +850,14 @@ class QuotationServiceTest {
         it.setSignPrice(null);
         it.getTaxes().setTaxFactor(null);
         it.getProduct().setPl(null);
-        it.getProduct().setWeightEa(null);
+        it.getProduct().setWeightPerUnit(null);
 
         service().updateItem(107L, 500L, Map.of("qty", "5"));
 
         assertThat(it.getAmount()).isEqualByComparingTo("0");
         assertThat(it.getTaxes().getTaxAmount()).isEqualByComparingTo("0");
         // A null pallet size reads as one, so the count equals the quantity.
-        assertThat(it.getProduct().getPalletxqty()).isEqualByComparingTo("5");
+        assertThat(it.getProduct().getPalletQuantity()).isEqualByComparingTo("5");
     }
 
     @Test
@@ -869,7 +869,7 @@ class QuotationServiceTest {
 
         service().updateItem(107L, 500L, Map.of("qty", "5"));
 
-        assertThat(it.getProduct().getPalletxqty()).isEqualByComparingTo("0");
+        assertThat(it.getProduct().getPalletQuantity()).isEqualByComparingTo("0");
     }
 
     @Test
@@ -880,9 +880,9 @@ class QuotationServiceTest {
 
         service().updateItem(107L, 500L, Map.of("exemp", "9.5"));
 
-        assertThat(it.getTaxes().getExcentPorcentaje()).isEqualByComparingTo("9.5");
+        assertThat(it.getTaxes().getExemptionPercentage()).isEqualByComparingTo("9.5");
         // Half of the line's 19% rate, so half of its 38 of tax.
-        assertThat(it.getTaxes().getExcentAmount()).isEqualByComparingTo("19.00");
+        assertThat(it.getTaxes().getExemptionAmount()).isEqualByComparingTo("19.00");
     }
 
     @Test
@@ -893,8 +893,8 @@ class QuotationServiceTest {
 
         service().updateItem(107L, 500L, Map.of("exemp", "50"));
 
-        assertThat(it.getTaxes().getExcentPorcentaje()).isEqualByComparingTo("19");
-        assertThat(it.getTaxes().getExcentAmount()).isEqualByComparingTo("38.00");
+        assertThat(it.getTaxes().getExemptionPercentage()).isEqualByComparingTo("19");
+        assertThat(it.getTaxes().getExemptionAmount()).isEqualByComparingTo("38.00");
     }
 
     @Test
@@ -905,8 +905,8 @@ class QuotationServiceTest {
 
         service().updateItem(107L, 500L, Map.of("exemp", "-5"));
 
-        assertThat(it.getTaxes().getExcentPorcentaje()).isEqualByComparingTo("0");
-        assertThat(it.getTaxes().getExcentAmount()).isEqualByComparingTo("0");
+        assertThat(it.getTaxes().getExemptionPercentage()).isEqualByComparingTo("0");
+        assertThat(it.getTaxes().getExemptionAmount()).isEqualByComparingTo("0");
     }
 
     @Test
@@ -914,12 +914,12 @@ class QuotationServiceTest {
     void updateItemForcesExemptionToZeroOnUntaxedLine() {
         Quotation q = quotation(1);
         QuotationItem it = readyForUpdate(q);
-        it.getTaxes().setTaxPorcentaje(BigDecimal.ZERO);
+        it.getTaxes().setTaxPercentage(BigDecimal.ZERO);
 
         service().updateItem(107L, 500L, Map.of("exemp", "19"));
 
-        assertThat(it.getTaxes().getExcentPorcentaje()).isEqualByComparingTo("0");
-        assertThat(it.getTaxes().getExcentAmount()).isEqualByComparingTo("0");
+        assertThat(it.getTaxes().getExemptionPercentage()).isEqualByComparingTo("0");
+        assertThat(it.getTaxes().getExemptionAmount()).isEqualByComparingTo("0");
     }
 
     @Test
@@ -927,12 +927,12 @@ class QuotationServiceTest {
     void updateItemHandlesNullTaxFigures() {
         Quotation q = quotation(1);
         QuotationItem it = readyForUpdate(q);
-        it.getTaxes().setTaxPorcentaje(null);
+        it.getTaxes().setTaxPercentage(null);
         it.getTaxes().setTaxAmount(null);
 
         service().updateItem(107L, 500L, Map.of("exemp", "19"));
 
-        assertThat(it.getTaxes().getExcentAmount()).isEqualByComparingTo("0");
+        assertThat(it.getTaxes().getExemptionAmount()).isEqualByComparingTo("0");
     }
 
     @Test
@@ -941,14 +941,14 @@ class QuotationServiceTest {
         Quotation q = quotation(1);
         QuotationItem it = readyForUpdate(q);
         // 19% of a 19% rate: the line is fully exempt.
-        it.getTaxes().setExcentPorcentaje(new BigDecimal("19"));
-        it.getTaxes().setExcentAmount(new BigDecimal("38"));
+        it.getTaxes().setExemptionPercentage(new BigDecimal("19"));
+        it.getTaxes().setExemptionAmount(new BigDecimal("38"));
 
         service().updateItem(107L, 500L, Map.of("qty", "5"));
 
         // The tax moved from 38 to 95, so the exempt amount has to follow.
         assertThat(it.getTaxes().getTaxAmount()).isEqualByComparingTo("95");
-        assertThat(it.getTaxes().getExcentAmount()).isEqualByComparingTo("95.00");
+        assertThat(it.getTaxes().getExemptionAmount()).isEqualByComparingTo("95.00");
     }
 
     @Test
@@ -956,12 +956,12 @@ class QuotationServiceTest {
     void updateItemKeepsAbsentExemptionAbsent() {
         Quotation q = quotation(1);
         QuotationItem it = readyForUpdate(q);
-        it.getTaxes().setExcentPorcentaje(null);
+        it.getTaxes().setExemptionPercentage(null);
 
-        service().updateItem(107L, 500L, Map.of("icomments", "sin IVA"));
+        service().updateItem(107L, 500L, Map.of("comment", "sin IVA"));
 
-        assertThat(it.getTaxes().getExcentPorcentaje()).isEqualByComparingTo("0");
-        assertThat(it.getTaxes().getExcentAmount()).isEqualByComparingTo("0");
+        assertThat(it.getTaxes().getExemptionPercentage()).isEqualByComparingTo("0");
+        assertThat(it.getTaxes().getExemptionAmount()).isEqualByComparingTo("0");
     }
 
     @Test
@@ -984,9 +984,9 @@ class QuotationServiceTest {
         Quotation q = quotation(1);
         QuotationItem it = readyForUpdate(q);
 
-        service().updateItem(107L, 500L, Map.of("icomments", "entregar en bodega 3"));
+        service().updateItem(107L, 500L, Map.of("comment", "entregar en bodega 3"));
 
-        assertThat(it.getIcomments()).isEqualTo("entregar en bodega 3");
+        assertThat(it.getComment()).isEqualTo("entregar en bodega 3");
     }
 
     @Test
@@ -995,9 +995,9 @@ class QuotationServiceTest {
         Quotation q = quotation(1);
         QuotationItem it = readyForUpdate(q);
 
-        service().updateItem(107L, 500L, Map.of("icomments", "x".repeat(600)));
+        service().updateItem(107L, 500L, Map.of("comment", "x".repeat(600)));
 
-        assertThat(it.getIcomments()).hasSize(500);
+        assertThat(it.getComment()).hasSize(500);
     }
 
     @Test
@@ -1007,23 +1007,23 @@ class QuotationServiceTest {
         QuotationItem it = readyForUpdate(q);
         QuotationService service = service();
 
-        service.updateItem(107L, 500L, Map.of("includepic", true));
-        assertThat(it.getIncludepic()).isEqualTo(1);
+        service.updateItem(107L, 500L, Map.of("includeImage", true));
+        assertThat(it.getIncludeImage()).isEqualTo(1);
 
-        service.updateItem(107L, 500L, Map.of("includepic", false));
-        assertThat(it.getIncludepic()).isZero();
+        service.updateItem(107L, 500L, Map.of("includeImage", false));
+        assertThat(it.getIncludeImage()).isZero();
 
-        service.updateItem(107L, 500L, Map.of("includepic", "1"));
-        assertThat(it.getIncludepic()).isEqualTo(1);
+        service.updateItem(107L, 500L, Map.of("includeImage", "1"));
+        assertThat(it.getIncludeImage()).isEqualTo(1);
 
-        service.updateItem(107L, 500L, Map.of("includepic", "0"));
-        assertThat(it.getIncludepic()).isZero();
+        service.updateItem(107L, 500L, Map.of("includeImage", "0"));
+        assertThat(it.getIncludeImage()).isZero();
 
-        service.updateItem(107L, 500L, Map.of("includepic", "true"));
-        assertThat(it.getIncludepic()).isEqualTo(1);
+        service.updateItem(107L, 500L, Map.of("includeImage", "true"));
+        assertThat(it.getIncludeImage()).isEqualTo(1);
 
-        service.updateItem(107L, 500L, Map.of("includepic", "FALSE"));
-        assertThat(it.getIncludepic()).isZero();
+        service.updateItem(107L, 500L, Map.of("includeImage", "FALSE"));
+        assertThat(it.getIncludeImage()).isZero();
     }
 
     @Test
@@ -1260,7 +1260,7 @@ class QuotationServiceTest {
     private SendToOmsRequest omsRequest() {
         SendToOmsRequest req = new SendToOmsRequest();
         req.setSubmittedBy(1);
-        req.setVentanas("2026-09-15T08:00|2026-09-15T12:00|2026-09-15T10:00|4471");
+        req.setDeliveryWindows("2026-09-15T08:00|2026-09-15T12:00|2026-09-15T10:00|4471");
         return req;
     }
 
@@ -1283,7 +1283,7 @@ class QuotationServiceTest {
         Map<String, Object> payload = Map.of("orderNumber", "107");
         when(quotationRepository.findById(107L)).thenReturn(Optional.of(q));
         when(quotationItemRepository.findByQuotation_IdOrderByProductIdAsc(107L)).thenReturn(items);
-        when(omsService.getQuotationContext(eq(107L), eq(3), anyString(), eq(1))).thenReturn(omsContext(club));
+        when(omsService.buildOmsContext(eq(107L), eq(3), anyString(), eq(1))).thenReturn(omsContext(club));
         when(omsPayloadBuilder.build(any(), any(), any(), anyString())).thenReturn(payload);
         repoReturnsSelf();
         return q;
@@ -1293,7 +1293,7 @@ class QuotationServiceTest {
     @DisplayName("an accepted order has its number stored on the quotation")
     void sendToOmsStoresOrderNumber() {
         Quotation q = omsReady(clubIn("CO"));
-        when(omsService.sendPayload(any(), eq("CO"), eq("tok-123"))).thenReturn("{\"orderId\":\"SO-9001\"}");
+        when(omsService.submitOrder(any(), eq("CO"), eq("tok-123"))).thenReturn("{\"orderId\":\"SO-9001\"}");
 
         String raw = service(startIdp("{\"access_token\":\"tok-123\"}")).sendToOms(107L, omsRequest());
 
@@ -1307,7 +1307,7 @@ class QuotationServiceTest {
     void sendToOmsLeavesOrderNumberUnsetOnRejection() {
         Quotation q = omsReady(clubIn("CO"));
         String refusal = "{\"errors\":[{\"message\":\"membership blocked\"}]}";
-        when(omsService.sendPayload(any(), anyString(), anyString())).thenReturn(refusal);
+        when(omsService.submitOrder(any(), anyString(), anyString())).thenReturn(refusal);
 
         String raw = service(startIdp("{\"access_token\":\"tok-123\"}")).sendToOms(107L, omsRequest());
 
@@ -1321,7 +1321,7 @@ class QuotationServiceTest {
     @DisplayName("an answer that is not JSON at all is still returned to the caller")
     void sendToOmsReturnsUnparseableAnswer() {
         omsReady(clubIn("CO"));
-        when(omsService.sendPayload(any(), anyString(), anyString())).thenReturn("<html>502 Bad Gateway</html>");
+        when(omsService.submitOrder(any(), anyString(), anyString())).thenReturn("<html>502 Bad Gateway</html>");
 
         String raw = service(startIdp("{\"access_token\":\"tok-123\"}")).sendToOms(107L, omsRequest());
 
@@ -1333,57 +1333,57 @@ class QuotationServiceTest {
     @DisplayName("the window and the club's country reach OMS as the payload and the destination")
     void sendToOmsPassesWindowAndCountry() {
         Quotation q = omsReady(clubIn("SV"));
-        when(omsService.sendPayload(any(), anyString(), anyString())).thenReturn("{\"orderId\":1}");
+        when(omsService.submitOrder(any(), anyString(), anyString())).thenReturn("{\"orderId\":1}");
 
         service(startIdp("{\"access_token\":\"tok-123\"}")).sendToOms(107L, omsRequest());
 
         verify(omsPayloadBuilder).build(eq(q), any(), any(),
                 eq("2026-09-15T08:00|2026-09-15T12:00|2026-09-15T10:00|4471"));
-        verify(omsService).sendPayload(any(), eq("SV"), eq("tok-123"));
+        verify(omsService).submitOrder(any(), eq("SV"), eq("tok-123"));
     }
 
     @Test
     @DisplayName("a context with no club falls back to Costa Rica")
     void sendToOmsDefaultsCountryWithoutClub() {
         omsReady(null);
-        when(omsService.sendPayload(any(), anyString(), anyString())).thenReturn("{\"orderId\":1}");
+        when(omsService.submitOrder(any(), anyString(), anyString())).thenReturn("{\"orderId\":1}");
 
         service(startIdp("{\"access_token\":\"tok-123\"}")).sendToOms(107L, omsRequest());
 
-        verify(omsService).sendPayload(any(), eq("CR"), anyString());
+        verify(omsService).submitOrder(any(), eq("CR"), anyString());
     }
 
     @Test
     @DisplayName("a club that is not a map at all falls back to Costa Rica")
     void sendToOmsDefaultsCountryWhenClubIsNotAMap() {
         omsReady("no soy un mapa");
-        when(omsService.sendPayload(any(), anyString(), anyString())).thenReturn("{\"orderId\":1}");
+        when(omsService.submitOrder(any(), anyString(), anyString())).thenReturn("{\"orderId\":1}");
 
         service(startIdp("{\"access_token\":\"tok-123\"}")).sendToOms(107L, omsRequest());
 
-        verify(omsService).sendPayload(any(), eq("CR"), anyString());
+        verify(omsService).submitOrder(any(), eq("CR"), anyString());
     }
 
     @Test
     @DisplayName("a club whose country code is blank falls back to Costa Rica")
     void sendToOmsDefaultsCountryWhenBlank() {
         omsReady(clubIn("   "));
-        when(omsService.sendPayload(any(), anyString(), anyString())).thenReturn("{\"orderId\":1}");
+        when(omsService.submitOrder(any(), anyString(), anyString())).thenReturn("{\"orderId\":1}");
 
         service(startIdp("{\"access_token\":\"tok-123\"}")).sendToOms(107L, omsRequest());
 
-        verify(omsService).sendPayload(any(), eq("CR"), anyString());
+        verify(omsService).submitOrder(any(), eq("CR"), anyString());
     }
 
     @Test
     @DisplayName("a club whose country code is missing falls back to Costa Rica")
     void sendToOmsDefaultsCountryWhenAbsent() {
         omsReady(new HashMap<String, Object>());
-        when(omsService.sendPayload(any(), anyString(), anyString())).thenReturn("{\"orderId\":1}");
+        when(omsService.submitOrder(any(), anyString(), anyString())).thenReturn("{\"orderId\":1}");
 
         service(startIdp("{\"access_token\":\"tok-123\"}")).sendToOms(107L, omsRequest());
 
-        verify(omsService).sendPayload(any(), eq("CR"), anyString());
+        verify(omsService).submitOrder(any(), eq("CR"), anyString());
     }
 
     @Test
@@ -1393,14 +1393,14 @@ class QuotationServiceTest {
         q.setCustomer(null);
         when(quotationRepository.findById(107L)).thenReturn(Optional.of(q));
         when(quotationItemRepository.findByQuotation_IdOrderByProductIdAsc(107L)).thenReturn(List.of());
-        when(omsService.getQuotationContext(eq(107L), eq(3), isNull(), eq(1))).thenReturn(omsContext(clubIn("CO")));
+        when(omsService.buildOmsContext(eq(107L), eq(3), isNull(), eq(1))).thenReturn(omsContext(clubIn("CO")));
         when(omsPayloadBuilder.build(any(), any(), any(), anyString())).thenReturn(Map.of());
-        when(omsService.sendPayload(any(), anyString(), anyString())).thenReturn("{\"orderId\":1}");
+        when(omsService.submitOrder(any(), anyString(), anyString())).thenReturn("{\"orderId\":1}");
         repoReturnsSelf();
 
         service(startIdp("{\"access_token\":\"tok-123\"}")).sendToOms(107L, omsRequest());
 
-        verify(omsService).getQuotationContext(107L, 3, null, 1);
+        verify(omsService).buildOmsContext(107L, 3, null, 1);
     }
 
     @Test
@@ -1411,7 +1411,7 @@ class QuotationServiceTest {
         assertThatThrownBy(() -> service().sendToOms(107L, omsRequest()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("must be closed (status=3). Current: 1");
-        verify(omsService, never()).sendPayload(any(), anyString(), anyString());
+        verify(omsService, never()).submitOrder(any(), anyString(), anyString());
     }
 
     @Test
@@ -1431,18 +1431,18 @@ class QuotationServiceTest {
         assertThatThrownBy(() -> service(deadIdp()).sendToOms(107L, omsRequest()))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Error obteniendo token OMS");
-        verify(omsService, never()).sendPayload(any(), anyString(), anyString());
+        verify(omsService, never()).submitOrder(any(), anyString(), anyString());
     }
 
     @Test
     @DisplayName("a token response with no access_token yields an empty token rather than a null one")
     void sendToOmsToleratesTokenlessResponse() {
         omsReady(clubIn("CO"));
-        when(omsService.sendPayload(any(), anyString(), anyString())).thenReturn("{\"orderId\":1}");
+        when(omsService.submitOrder(any(), anyString(), anyString())).thenReturn("{\"orderId\":1}");
 
         service(startIdp("{\"error\":\"invalid_client\"}")).sendToOms(107L, omsRequest());
 
-        verify(omsService).sendPayload(any(), anyString(), eq(""));
+        verify(omsService).submitOrder(any(), anyString(), eq(""));
     }
 
     // ── getOmsStatus ──────────────────────────────────────────────────────

@@ -13,7 +13,7 @@ public class DeliveryLogResponse {
     private final Integer storeId;
     private final Integer statusId;
     private final Integer createdBy;
-    private final String  fecha;
+    private final String  date;
     private final String  closedAt;
     private final String  sentAt;
     private final Integer deliveryCount;

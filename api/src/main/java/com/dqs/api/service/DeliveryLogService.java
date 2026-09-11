@@ -2,6 +2,7 @@ package com.dqs.api.service;
 
 import com.dqs.api.dto.DeliveryLogResponse;
 import com.dqs.api.repository.DeliveryLogRepository;
+import com.dqs.api.util.MapUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -50,7 +51,7 @@ public class DeliveryLogService {
     public List<DeliveryLogResponse> getActiveLogs(int storeId, String routeId) {
         log.info("[DeliveryLogService] getActiveLogs storeId={} routeId={}", storeId, routeId);
         return deliveryLogRepository.findByStoreAndStatus(storeId, 2, routeId).stream()
-            .map(row -> toResponse(row, deliveryLogRepository.findDeliveriesByLogId(toLong(row.get("logcargueid")))))
+            .map(row -> toResponse(row, deliveryLogRepository.findDeliveriesByLogId(MapUtils.toLong(row.get("logcargueid")))))
             .toList();
     }
 
@@ -68,7 +69,7 @@ public class DeliveryLogService {
     public List<DeliveryLogResponse> getHistoricalLogs(int storeId, String routeId) {
         log.info("[DeliveryLogService] getHistoricalLogs storeId={} routeId={}", storeId, routeId);
         return deliveryLogRepository.findByStoreAndStatus(storeId, 3, routeId).stream()
-            .map(row -> toResponse(row, deliveryLogRepository.findDeliveriesByLogId(toLong(row.get("logcargueid")))))
+            .map(row -> toResponse(row, deliveryLogRepository.findDeliveriesByLogId(MapUtils.toLong(row.get("logcargueid")))))
             .toList();
     }
 
@@ -77,31 +78,16 @@ public class DeliveryLogService {
     private DeliveryLogResponse toResponse(Map<String, Object> row, List<Map<String, Object>> deliveries) {
         if (row == null) return null;
         return DeliveryLogResponse.builder()
-            .logId(toLong(row.get("logcargueid")))
-            .storeId(toInt(row.get("ps_tienda_id")))
-            .statusId(toInt(row.get("statusid")))
-            .createdBy(toInt(row.get("creado_por")))
-            .fecha(str(row.get("fecha")))
-            .closedAt(str(row.get("fechacierre")))
-            .sentAt(str(row.get("fechaenvio")))
+            .logId(MapUtils.toLongOrNull(row.get("logcargueid")))
+            .storeId(MapUtils.toIntOrNull(row.get("ps_tienda_id")))
+            .statusId(MapUtils.toIntOrNull(row.get("statusid")))
+            .createdBy(MapUtils.toIntOrNull(row.get("creado_por")))
+            .date(MapUtils.strOrNull(row.get("fecha")))
+            .closedAt(MapUtils.strOrNull(row.get("fechacierre")))
+            .sentAt(MapUtils.strOrNull(row.get("fechaenvio")))
             .deliveryCount(deliveries.size())
             .deliveries(deliveries)
             .build();
     }
 
-    private Long toLong(Object v) {
-        if (v == null) return null;
-        if (v instanceof Number) return ((Number) v).longValue();
-        return Long.parseLong(v.toString());
-    }
-
-    private Integer toInt(Object v) {
-        if (v == null) return null;
-        if (v instanceof Number) return ((Number) v).intValue();
-        return Integer.parseInt(v.toString());
-    }
-
-    private String str(Object v) {
-        return v != null ? v.toString() : null;
-    }
 }

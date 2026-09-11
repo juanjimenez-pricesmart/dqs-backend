@@ -70,7 +70,7 @@ class DeliveryLogServiceTest {
         assertThat(out.getLogId()).isEqualTo(9L);
         assertThat(out.getDeliveryCount()).isEqualTo(2);
         assertThat(out.getStoreId()).isEqualTo(STORE);
-        assertThat(out.getFecha()).isEqualTo("2026-09-10");
+        assertThat(out.getDate()).isEqualTo("2026-09-10");
     }
 
     @Test
@@ -157,7 +157,7 @@ class DeliveryLogServiceTest {
         assertThat(out.getStoreId()).isNull();
         assertThat(out.getStatusId()).isNull();
         assertThat(out.getCreatedBy()).isNull();
-        assertThat(out.getFecha()).isNull();
+        assertThat(out.getDate()).isNull();
     }
 
     @Test

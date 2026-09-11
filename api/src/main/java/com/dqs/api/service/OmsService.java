@@ -110,11 +110,6 @@ public class OmsService {
         return context;
     }
 
-    // Keep old name as a delegate so callers aren't broken during migration
-    public Map<String, Object> getQuotationContext(Long quotationId, Integer storeId, String membership, Integer userId) {
-        return buildOmsContext(quotationId, storeId, membership, userId);
-    }
-
     // ── Membership API ────────────────────────────────────────────────────
 
     private Map<String, Object> getMemberData(String membership, Long quotationId) {
@@ -247,8 +242,4 @@ public class OmsService {
         }
     }
 
-    // Keep old name as delegate so callers aren't broken during migration
-    public String sendPayload(Map<String, Object> payload, String countryIso2, String token) {
-        return submitOrder(payload, countryIso2, token);
-    }
 }

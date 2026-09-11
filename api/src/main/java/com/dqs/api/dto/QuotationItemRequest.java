@@ -33,8 +33,8 @@ public class QuotationItemRequest {
     @JsonProperty("signPrice")
     private BigDecimal signPrice = BigDecimal.ZERO;
 
-    @JsonProperty("taxPorcentaje")
-    private BigDecimal taxPorcentaje = BigDecimal.ZERO;
+    @JsonProperty("taxPercentage")
+    private BigDecimal taxPercentage = BigDecimal.ZERO;
 
     @JsonProperty("taxFactor")
     private BigDecimal taxFactor = BigDecimal.ZERO;
@@ -42,14 +42,14 @@ public class QuotationItemRequest {
     @JsonProperty("taxIco")
     private BigDecimal taxIco = BigDecimal.ZERO;
 
-    @JsonProperty("cuEa")
-    private BigDecimal cuEa = BigDecimal.ZERO;
+    @JsonProperty("packSize")
+    private BigDecimal packSize = BigDecimal.ZERO;
 
     @JsonProperty("pl")
     private BigDecimal pl = BigDecimal.ZERO;
 
-    @JsonProperty("weightEa")
-    private BigDecimal weightEa = BigDecimal.ZERO;
+    @JsonProperty("weightPerUnit")
+    private BigDecimal weightPerUnit = BigDecimal.ZERO;
 
     @JsonProperty("onhand")
     private BigDecimal onhand = BigDecimal.ZERO;

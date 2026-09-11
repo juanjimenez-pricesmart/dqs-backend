@@ -123,7 +123,7 @@ class FiscalServiceTest {
                 .businessName("ACME SA").address("CRA 43 N 82 66")
                 .phone("3001234567").email("compras@acme.co").nrc("12345")
                 .economicActivityCode("4711").cityCode("08001").zoneCode("01")
-                .neighborhoodCode("0101").generateFiscal(true).generateTiqueteElectronico(false)
+                .neighborhoodCode("0101").generateFiscal(true).generateElectronicReceipt(false)
                 .createdAt(Instant.parse("2026-09-01T10:00:00Z"))
                 .updatedAt(Instant.parse("2026-09-02T11:00:00Z"))
                 .build();
@@ -245,7 +245,7 @@ class FiscalServiceTest {
         QuotationFiscal row = lastSaved();
         assertThat(row.getGenerateFiscal()).isTrue();
         assertThat(row.getDocumentValidated()).isTrue();
-        assertThat(row.getGenerateTiqueteElectronico()).isTrue();
+        assertThat(row.getGenerateElectronicReceipt()).isTrue();
 
         data.put("generate_fiscal", "0");
         data.put("document_validated", false);
@@ -254,7 +254,7 @@ class FiscalServiceTest {
         row = lastSaved();
         assertThat(row.getGenerateFiscal()).isFalse();
         assertThat(row.getDocumentValidated()).isFalse();
-        assertThat(row.getGenerateTiqueteElectronico()).isFalse();
+        assertThat(row.getGenerateElectronicReceipt()).isFalse();
     }
 
     @Test
@@ -430,7 +430,7 @@ class FiscalServiceTest {
     void readSendsFlagsAsNumbers() {
         QuotationFiscal row = existing();
         row.setGenerateFiscal(true);
-        row.setGenerateTiqueteElectronico(false);
+        row.setGenerateElectronicReceipt(false);
         row.setDocumentValidated(null);
         when(fiscalRepository.findByQuotation_Id(107L)).thenReturn(Optional.of(row));
 
@@ -443,7 +443,7 @@ class FiscalServiceTest {
 
         // And the other way round, so neither field is hard-wired to a value.
         row.setGenerateFiscal(false);
-        row.setGenerateTiqueteElectronico(true);
+        row.setGenerateElectronicReceipt(true);
         assertThat(service().getFiscalDataByQuotation(107L))
                 .containsEntry("generate_fiscal", 0)
                 .containsEntry("generate_tiquete_electronico", 1);

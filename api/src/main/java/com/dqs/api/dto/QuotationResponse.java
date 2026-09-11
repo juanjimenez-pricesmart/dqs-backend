@@ -17,7 +17,7 @@ public class QuotationResponse {
     private Integer userId;
     private Integer statusId;
     private LocalDateTime dateTime;
-    private LocalDate dexpired;
+    private LocalDate expiryDate;
 
     // customer
     private String customerName;
@@ -26,7 +26,7 @@ public class QuotationResponse {
 
     // totals
     private BigDecimal taxRate;
-    private Integer aplicarImpuestos;
+    private Integer applyTaxes;
     private Integer excent;
     private BigDecimal grossAmount;
     private BigDecimal netAmount;

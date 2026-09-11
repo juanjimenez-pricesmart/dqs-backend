@@ -420,7 +420,7 @@ class OmsServiceTest {
         stubDatabase(clubRow("CO"), 1, Map.of("id", 1, "email", "v@pricesmart.com"));
         String url = startServer(200, MEMBER_JSON);
 
-        assertThat(service(url).getQuotationContext(107L, 6101, "70012345678901", 1))
+        assertThat(service(url).buildOmsContext(107L, 6101, "70012345678901", 1))
                 .containsKeys("club", "member", "user", "exchange_rate");
     }
 
@@ -476,7 +476,7 @@ class OmsServiceTest {
     void sendPayloadDelegates() {
         String url = startServer(200, "{\"orderId\":1}");
 
-        assertThat(service(url).sendPayload(Map.of(), "CR", "tok-123")).isEqualTo("{\"orderId\":1}");
+        assertThat(service(url).submitOrder(Map.of(), "CR", "tok-123")).isEqualTo("{\"orderId\":1}");
     }
 
     // ── Status history ────────────────────────────────────────────────────

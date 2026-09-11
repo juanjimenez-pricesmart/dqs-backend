@@ -33,13 +33,13 @@ public class QuotationItem {
     private BigDecimal amount;
 
     @Column(name = "icomments", length = 500)
-    private String icomments;
+    private String comment;
 
     @Column(name = "includepic", columnDefinition = "TINYINT")
-    private Integer includepic;
+    private Integer includeImage;
 
     @Column(name = "variacion", columnDefinition = "TINYINT")
-    private Integer variacion;
+    private Integer priceVariation;
 
     @OneToOne(mappedBy = "item", cascade = CascadeType.ALL, orphanRemoval = true)
     private QuotationItemTaxes taxes;

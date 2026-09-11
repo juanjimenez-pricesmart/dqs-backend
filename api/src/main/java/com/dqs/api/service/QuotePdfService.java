@@ -175,7 +175,7 @@ public class QuotePdfService {
         sb.append("<div class=\"quote-num\">Quote #").append(quote.getId()).append("</div>");
         if (quote.getQuoteNo() != null) sb.append("<div>").append(esc(quote.getQuoteNo())).append("</div>");
         if (quote.getDateTime() != null) sb.append("<div>Date: ").append(quote.getDateTime().format(DATE_FMT)).append("</div>");
-        if (quote.getDexpired() != null) sb.append("<div>Expires: ").append(quote.getDexpired().format(DATE_FMT)).append("</div>");
+        if (quote.getExpiryDate() != null) sb.append("<div>Expires: ").append(quote.getExpiryDate().format(DATE_FMT)).append("</div>");
         sb.append("</div></div>");
 
         // ── Club + Customer (side by side) ──
@@ -282,7 +282,7 @@ public class QuotePdfService {
         List<QuotationItemResponse> withImages = items.stream()
             .filter(i -> i.getPicture1() != null && !i.getPicture1().isBlank()
                       && !i.getPicture1().equalsIgnoreCase("NULL")
-                      && (i.getIncludepic() == null || i.getIncludepic() == 1))
+                      && (i.getIncludeImage() == null || i.getIncludeImage() == 1))
             .toList();
 
         if (!withImages.isEmpty()) {
@@ -301,7 +301,7 @@ public class QuotePdfService {
 
         // ── Footer ──
         sb.append("<div class=\"footer\">PriceSmart B2B &#8212; This quote is valid until ")
-          .append(quote.getDexpired() != null ? quote.getDexpired().format(DATE_FMT) : "N/A")
+          .append(quote.getExpiryDate() != null ? quote.getExpiryDate().format(DATE_FMT) : "N/A")
           .append(". Prices subject to change without notice.</div>");
 
         sb.append("</body></html>");

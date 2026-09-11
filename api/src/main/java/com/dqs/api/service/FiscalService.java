@@ -14,6 +14,7 @@ import com.dqs.api.repository.QuotationRepository;
 import com.dqs.api.repository.ZoneRepository;
 import com.dqs.api.catalog.source.CatalogSource;
 import com.dqs.api.catalog.source.DocTypeInfo;
+import com.dqs.api.util.MapUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -87,7 +88,7 @@ public class FiscalService {
         fiscal.setCountry(str(data.get("country")));
         fiscal.setDocumentType(str(data.get("document_type")));
         fiscal.setDocumentNumber(str(data.get("document_number")));
-        fiscal.setDocumentValidated(toBool(data.get("document_validated")));
+        fiscal.setDocumentValidated(MapUtils.toBool(data.get("document_validated")));
         fiscal.setBusinessName(str(data.get("business_name")));
         fiscal.setAddress(str(data.get("address")));
         fiscal.setPhone(str(data.get("phone")));
@@ -97,8 +98,8 @@ public class FiscalService {
         fiscal.setCityCode(str(data.get("city_code")));
         fiscal.setZoneCode(str(data.get("zone_code")));
         fiscal.setNeighborhoodCode(str(data.get("neighborhood_code")));
-        fiscal.setGenerateFiscal(toBool(data.get("generate_fiscal")));
-        fiscal.setGenerateTiqueteElectronico(toBool(data.get("generate_tiquete_electronico")));
+        fiscal.setGenerateFiscal(MapUtils.toBool(data.get("generate_fiscal")));
+        fiscal.setGenerateElectronicReceipt(MapUtils.toBool(data.get("generate_tiquete_electronico")));
 
         fiscalRepository.save(fiscal);
         upsertCatalogs(data);
@@ -191,7 +192,7 @@ public class FiscalService {
             m.put("neighborhood_code",      f.getNeighborhoodCode());
             m.put("generate_fiscal",        Boolean.TRUE.equals(f.getGenerateFiscal()) ? 1 : 0);
             m.put("generate_tiquete_electronico",
-                                            Boolean.TRUE.equals(f.getGenerateTiqueteElectronico()) ? 1 : 0);
+                                            Boolean.TRUE.equals(f.getGenerateElectronicReceipt()) ? 1 : 0);
             m.put("created_at",             f.getCreatedAt() != null ? f.getCreatedAt().toString() : null);
             m.put("updated_at",             f.getUpdatedAt() != null ? f.getUpdatedAt().toString() : null);
 
@@ -267,15 +268,6 @@ public class FiscalService {
         if (v == null) return null;
         String s = v.toString();
         return s.isBlank() ? null : s;
-    }
-
-    /** The client sends 0/1; older callers and JSON booleans send true/false. */
-    private Boolean toBool(Object v) {
-        if (v == null) return Boolean.FALSE;
-        if (v instanceof Boolean b) return b;
-        if (v instanceof Number n) return n.intValue() != 0;
-        String s = v.toString().trim();
-        return s.equals("1") || s.equalsIgnoreCase("true");
     }
 
     private Long toLong(Object v) {

@@ -88,7 +88,7 @@ public class QuotationFiscal {
      * leaving those fields filled would submit data the operator opted out of.
      */
     @Column(name = "generate_tiquete_electronico", nullable = false)
-    private Boolean generateTiqueteElectronico;
+    private Boolean generateElectronicReceipt;
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private java.time.Instant createdAt;

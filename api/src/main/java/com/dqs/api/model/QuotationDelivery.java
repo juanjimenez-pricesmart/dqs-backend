@@ -91,7 +91,7 @@ public class QuotationDelivery {
 
     /** Load id assigned when the delivery is dispatched; written elsewhere. */
     @Column(name = "logcargueid")
-    private Double logCargueId;
+    private Double loadLogId;
 
     // The database owns these two: DEFAULT CURRENT_TIMESTAMP and ON UPDATE.
     // Marked non-insertable and non-updatable so Hibernate never overwrites

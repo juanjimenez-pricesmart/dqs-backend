@@ -32,7 +32,7 @@ public class Quotation {
     private LocalDateTime dateTime;
 
     @Column(name = "dexpired")
-    private LocalDate dexpired;
+    private LocalDate expiryDate;
 
     /**
      * Why the quotation was closed without a sale — a QuotationCancelReason id.

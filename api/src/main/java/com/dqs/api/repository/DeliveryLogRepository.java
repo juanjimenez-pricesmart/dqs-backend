@@ -86,7 +86,7 @@ public class DeliveryLogRepository {
         for (Long quotationId : quotationIds) {
             var delivery = deliveryRepository.findByQuotation_Id(quotationId).orElse(null);
             if (delivery == null) continue;
-            delivery.setLogCargueId((double) logId);
+            delivery.setLoadLogId((double) logId);
             deliveryRepository.save(delivery);
             updated++;
         }

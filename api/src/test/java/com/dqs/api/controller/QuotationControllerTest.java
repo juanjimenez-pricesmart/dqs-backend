@@ -417,7 +417,7 @@ class QuotationControllerTest {
         when(quotationService.sendToOms(eq(107L), any())).thenReturn("{\"orderId\":\"SO-9001\"}");
         SendToOmsRequest req = new SendToOmsRequest();
         req.setSubmittedBy(1);
-        req.setVentanas("a|b|c|4471");
+        req.setDeliveryWindows("a|b|c|4471");
 
         mvc.perform(post("/api/v1/quotations/107/send-to-oms")
                         .contentType(MediaType.APPLICATION_JSON).content(body(req)))

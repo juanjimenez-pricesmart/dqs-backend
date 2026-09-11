@@ -32,8 +32,8 @@ public class CreateQuotationRequest {
     @JsonProperty("taxRate")
     private BigDecimal taxRate = BigDecimal.ZERO;
 
-    @JsonProperty("aplicarImpuestos")
-    private Integer aplicarImpuestos = 1;
+    @JsonProperty("applyTaxes")
+    private Integer applyTaxes = 1;
 
     @JsonProperty("grossAmount")
     private BigDecimal grossAmount = BigDecimal.ZERO;
@@ -56,6 +56,6 @@ public class CreateQuotationRequest {
     @JsonProperty("serviceCharge")
     private BigDecimal serviceCharge = BigDecimal.ZERO;
 
-    @JsonProperty("dexpired")
-    private String dexpired;
+    @JsonProperty("expiryDate")
+    private String expiryDate;
 }

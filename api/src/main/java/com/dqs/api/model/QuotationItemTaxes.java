@@ -18,7 +18,7 @@ public class QuotationItemTaxes {
     private QuotationItem item;
 
     @Column(name = "tax_porcentaje", precision = 10, scale = 4)
-    private BigDecimal taxPorcentaje;
+    private BigDecimal taxPercentage;
 
     @Column(name = "tax_factor", precision = 15, scale = 4)
     private BigDecimal taxFactor;
@@ -30,8 +30,8 @@ public class QuotationItemTaxes {
     private BigDecimal taxIco;
 
     @Column(name = "excent_porcentaje", precision = 10, scale = 4)
-    private BigDecimal excentPorcentaje;
+    private BigDecimal exemptionPercentage;
 
     @Column(name = "excent_amount", precision = 15, scale = 4)
-    private BigDecimal excentAmount;
+    private BigDecimal exemptionAmount;
 }

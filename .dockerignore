@@ -1,0 +1,6 @@
+target
+.git
+.claude
+*.local.yml
+*-local.yml
+*.env

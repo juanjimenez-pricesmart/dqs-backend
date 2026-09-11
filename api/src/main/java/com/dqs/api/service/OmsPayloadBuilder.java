@@ -4,6 +4,7 @@ package com.dqs.api.service;
 import com.dqs.api.model.Quotation;
 import com.dqs.api.model.QuotationItem;
 import com.dqs.api.util.ClubCapabilities;
+import com.dqs.api.util.MapUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -21,13 +22,13 @@ public class OmsPayloadBuilder {
             Quotation quotation,
             List<QuotationItem> items,
             Map<String, Object> context,
-            String ventanas) {
+            String deliveryWindows) {
 
         // ── Context ───────────────────────────────────────────────────────
-        Map<String, Object> club    = castMap(context.get("club"));
-        Map<String, Object> member  = castMap(context.get("member"));
-        Map<String, Object> user    = castMap(context.get("user"));
-        Map<String, Object> fel     = context.get("fel") != null ? castMap(context.get("fel")) : null;
+        Map<String, Object> club    = MapUtils.castMap(context.get("club"));
+        Map<String, Object> member  = MapUtils.castMap(context.get("member"));
+        Map<String, Object> user    = MapUtils.castMap(context.get("user"));
+        Map<String, Object> fel     = context.get("fel") != null ? MapUtils.castMap(context.get("fel")) : null;
 
         String currency      = str(club.get("moneda"),              "USD");
         String language      = str(club.get("idioma"),              "es");
@@ -41,8 +42,8 @@ public class OmsPayloadBuilder {
                 isVatIncluded, taxName, currency, countryIso2);
 
         // ── Delivery windows ──────────────────────────────────────────────
-        String[] wx = (ventanas != null && !ventanas.isEmpty())
-                ? ventanas.split("\\|")
+        String[] wx = (deliveryWindows != null && !deliveryWindows.isEmpty())
+                ? deliveryWindows.split("\\|")
                 : new String[]{"", "", "", ""};
         while (wx.length < 4) wx = Arrays.copyOf(wx, 4);
 
@@ -69,8 +70,8 @@ public class OmsPayloadBuilder {
             double taxFactor  = toDouble(tx != null ? tx.getTaxFactor()    : null,    0);
             double taxIco     = toDouble(tx != null ? tx.getTaxIco()       : null,    0);
             double qty        = toDouble(item.getQty(),                               1);
-            double weightEa   = toDouble(pr != null ? pr.getWeightEa()     : null,    0);
-            double taxPercent = toDouble(tx != null ? tx.getTaxPorcentaje() : null,   0);
+            double weightEa   = toDouble(pr != null ? pr.getWeightPerUnit()     : null,    0);
+            double taxPercent = toDouble(tx != null ? tx.getTaxPercentage() : null,   0);
             boolean soldByWeight = pr != null && "Y".equals(pr.getSoldByWeight());
 
             // Base unit price for display
@@ -319,9 +320,4 @@ public class OmsPayloadBuilder {
         return val != null ? val : "";
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> castMap(Object val) {
-        if (val instanceof Map) return (Map<String, Object>) val;
-        return new LinkedHashMap<>();
-    }
 }
