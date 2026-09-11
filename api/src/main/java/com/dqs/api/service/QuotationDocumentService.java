@@ -69,7 +69,7 @@ public class QuotationDocumentService {
     // ── Upload ────────────────────────────────────────────────────────────────
 
     @Transactional
-    public QuotationDocumentResponse uploadVoucher(Long quotationId, MultipartFile file, Long userId) {
+    public QuotationDocumentResponse uploadVoucher(Long quotationId, MultipartFile file, Integer userId) {
         Quotation quotation = quotationRepository.findById(quotationId)
                 .orElseThrow(() -> new QuotationNotFoundException(quotationId));
 

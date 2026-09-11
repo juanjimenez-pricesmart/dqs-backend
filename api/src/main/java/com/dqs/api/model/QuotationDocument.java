@@ -44,8 +44,10 @@ public class QuotationDocument {
     @Column(name = "storage_url", nullable = false, length = 500)
     private String storageUrl;
 
+    /** A users.id, which is INT in the live schema — not BIGINT as the schema
+     *  file describes. Same reason Quotation.userId is an Integer. */
     @Column(name = "uploaded_by_user_id")
-    private Long uploadedByUserId;
+    private Integer uploadedByUserId;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

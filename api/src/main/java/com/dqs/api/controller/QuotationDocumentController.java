@@ -33,7 +33,7 @@ public class QuotationDocumentController {
             @Parameter(description = "ID de la cotización") @PathVariable Long id,
             @RequestParam("file") MultipartFile file,
             @Parameter(description = "Usuario que adjunta; opcional hasta que exista autenticación")
-            @RequestParam(value = "userId", required = false) Long userId) {
+            @RequestParam(value = "userId", required = false) Integer userId) {
         log.info("[QuotationDocumentController] POST /api/v1/quotations/{}/vouchers name={} bytes={}",
                 id, file.getOriginalFilename(), file.getSize());
         return ResponseEntity.status(HttpStatus.CREATED)

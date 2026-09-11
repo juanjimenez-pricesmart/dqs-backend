@@ -96,7 +96,7 @@ class QuotationDocumentServiceTest {
     @Test
     @DisplayName("the voucher lands where legacy puts it, so both applications' files sit together")
     void theKeyMatchesLegacysLayout() {
-        QuotationDocumentResponse response = service().uploadVoucher(107L, pdf("recibo.pdf"), 5836L);
+        QuotationDocumentResponse response = service().uploadVoucher(107L, pdf("recibo.pdf"), 5836);
 
         ArgumentCaptor<PutObjectRequest> put = ArgumentCaptor.forClass(PutObjectRequest.class);
         verify(s3Client).putObject(put.capture(), any(RequestBody.class));
@@ -108,7 +108,7 @@ class QuotationDocumentServiceTest {
         assertThat(response.getStorageUrl())
                 .isEqualTo("https://dqs-quotes-dev.s3.us-east-1.amazonaws.com/quotes/order_107/quote_107_payment_voucher.pdf");
         assertThat(response.getFileName()).isEqualTo("recibo.pdf");
-        assertThat(response.getUploadedByUserId()).isEqualTo(5836L);
+        assertThat(response.getUploadedByUserId()).isEqualTo(5836);
     }
 
     @Test

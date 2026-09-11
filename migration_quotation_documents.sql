@@ -10,6 +10,19 @@
 -- Idempotent on purpose — IF NOT EXISTS on the tables and INSERT IGNORE on the
 -- seeds — because the schema file may yet be applied in full somewhere else.
 -- If it is, this becomes a no-op rather than a conflict.
+--
+-- One column does NOT follow the schema file: it declares
+-- uploaded_by_user_id BIGINT, to match a users table it also declares with a
+-- BIGINT id. That users table was never created either. The live `users` is
+-- legacy's, its id is INT, and the FK is rejected outright against a BIGINT:
+--
+--   ERROR 3780 (HY000): Referencing column 'uploaded_by_user_id' and
+--   referenced column 'id' in foreign key constraint 'fk_qdoc_user' are
+--   incompatible
+--
+-- So this is INT, built from SHOW COLUMNS rather than from the migration file,
+-- exactly as repository/CLAUDE.md says to. Quotation.userId is already Integer
+-- for the same reason.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS document_types (
@@ -38,7 +51,7 @@ CREATE TABLE IF NOT EXISTS quotation_documents (
     reference_number    VARCHAR(50)   NULL COMMENT 'human number: invoice no, PO no',
     file_name           VARCHAR(255)  NULL,
     storage_url         VARCHAR(500)  NOT NULL COMMENT 'S3 object URL',
-    uploaded_by_user_id BIGINT        NULL,
+    uploaded_by_user_id INT           NULL COMMENT 'users.id, which is INT — see note above',
     created_at          TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     KEY idx_qdoc_quotation_type (quotation_id, document_type_id),

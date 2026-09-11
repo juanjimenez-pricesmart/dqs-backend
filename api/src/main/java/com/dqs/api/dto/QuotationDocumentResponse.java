@@ -14,6 +14,6 @@ public class QuotationDocumentResponse {
     private String documentType;
     private String fileName;
     private String storageUrl;
-    private Long uploadedByUserId;
+    private Integer uploadedByUserId;
     private LocalDateTime createdAt;
 }
