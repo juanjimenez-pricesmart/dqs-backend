@@ -52,6 +52,13 @@ public class QuotationService {
     @Value("${dqs.base-url}")
     private String dqsBaseUrl;
 
+    /**
+     * How long a quotation is valid for. It is both the default expiry on
+     * creation and what one press of "Extender fecha" adds, because legacy
+     * hardcodes 21 in each place separately and they have never disagreed.
+     */
+    private static final int EXPIRY_DAYS = 21;
+
     // ── Create ────────────────────────────────────────────────────────────
 
     @Transactional
@@ -497,6 +504,37 @@ public class QuotationService {
                 comment == null ? 0 : comment.length());
     }
 
+    // ── Extend the expiry ─────────────────────────────────────────────────
+
+    /**
+     * Pushes the expiry out by 21 days — legacy's Orders::extenderfecha
+     * (application/controllers/Orders.php:656-679).
+     *
+     * It adds to the date already on the quotation, not to today, so a second
+     * press gives 42 days and a quotation that lapsed a month ago is extended
+     * from the day it lapsed rather than revived from now. Legacy's
+     * DATE_ADD(dexpired, INTERVAL 21 DAY) behaves the same way, and like it
+     * there is no cap, no status check and no audit trail — the button is
+     * simply not offered to the base role.
+     *
+     * The one place we cannot follow it is a quotation with no expiry at all:
+     * MySQL's DATE_ADD(NULL, ...) is NULL, so legacy silently blanks the field
+     * and the screen then shows nothing. Here it becomes 21 days from today,
+     * which is what a quotation created without an explicit expiry already
+     * gets.
+     */
+    @Transactional
+    public QuotationResponse extendExpiry(Long id) {
+        Quotation quotation = findOrThrow(id);
+
+        LocalDate current  = quotation.getExpiryDate();
+        LocalDate extended = (current != null ? current : LocalDate.now()).plusDays(EXPIRY_DAYS);
+        quotation.setExpiryDate(extended);
+
+        log.info("[QuotationService] extendExpiry id={} {} -> {}", id, current, extended);
+        return toResponse(quotationRepository.save(quotation));
+    }
+
     // ── Get items ─────────────────────────────────────────────────────────
 
     public List<QuotationItemResponse> getItems(Long quotationId) {
@@ -597,12 +635,12 @@ public class QuotationService {
     }
 
     private LocalDate parseExpiry(String expiryDate) {
-        if (expiryDate == null || expiryDate.isBlank()) return LocalDate.now().plusDays(21);
+        if (expiryDate == null || expiryDate.isBlank()) return LocalDate.now().plusDays(EXPIRY_DAYS);
         try {
             return LocalDate.parse(expiryDate);
         } catch (DateTimeParseException e) {
-            log.warn("[QuotationService] expiryDate inválido '{}', usando +21 días", expiryDate);
-            return LocalDate.now().plusDays(21);
+            log.warn("[QuotationService] expiryDate inválido '{}', usando +{} días", expiryDate, EXPIRY_DAYS);
+            return LocalDate.now().plusDays(EXPIRY_DAYS);
         }
     }
 

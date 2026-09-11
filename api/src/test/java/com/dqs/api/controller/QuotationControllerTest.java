@@ -310,6 +310,19 @@ class QuotationControllerTest {
                 .andExpect(jsonPath("$.id").value(107));
     }
 
+    @Test
+    @DisplayName("extending the expiry answers the quotation carrying its new date")
+    void extendExpiryReturnsTheNewDate() throws Exception {
+        when(quotationService.extendExpiry(107L)).thenReturn(
+                QuotationResponse.builder().id(107L).expiryDate(java.time.LocalDate.of(2026, 10, 22)).build());
+
+        // The screen replaces the expiry badge with whatever comes back, so the
+        // date has to be in the body — a 204 would leave it showing the old one.
+        mvc.perform(patch("/api/v1/quotations/107/extend-expiry"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.expiryDate").value("2026-10-22"));
+    }
+
     // ── Items ─────────────────────────────────────────────────────────────
 
     @Test
