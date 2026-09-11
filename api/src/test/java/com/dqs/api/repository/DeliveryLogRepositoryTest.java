@@ -142,7 +142,7 @@ class DeliveryLogRepositoryTest {
 
         assertThat(repository().linkDeliveriesToLog(List.of(107L), 9L)).isEqualTo(1);
 
-        assertThat(delivery.getLogCargueId()).isEqualTo(9.0);
+        assertThat(delivery.getLoadLogId()).isEqualTo(9.0);
         verify(deliveryRepository).save(delivery);
     }
 
