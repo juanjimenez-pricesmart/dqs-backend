@@ -18,6 +18,7 @@ public class QuotationResponse {
     private Integer statusId;
     private LocalDateTime dateTime;
     private LocalDate expiryDate;
+    private String comments;
 
     // customer
     private String customerName;

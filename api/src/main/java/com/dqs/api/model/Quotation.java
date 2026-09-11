@@ -27,6 +27,14 @@ public class Quotation {
     @Column(name = "status_id")
     private Integer statusId;
 
+    /**
+     * The header note the operator types under the item table, printed on the
+     * quotation PDF. Legacy's orders.comments, written by Orders::savecomment
+     * when item == 0.
+     */
+    @Column(name = "comments", columnDefinition = "TEXT")
+    private String comments;
+
     @CreationTimestamp
     @Column(name = "date_time", updatable = false)
     private LocalDateTime dateTime;

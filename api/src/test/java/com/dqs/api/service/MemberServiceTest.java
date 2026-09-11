@@ -1,6 +1,7 @@
 package com.dqs.api.service;
 
 import com.dqs.api.client.BusinessApiClient;
+import com.dqs.api.repository.MemberContactOverrideRepository;
 import com.dqs.api.repository.support.NativeQueries;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -12,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -26,12 +28,13 @@ class MemberServiceTest {
 
     @Mock private BusinessApiClient businessApiClient;
     @Mock private NativeQueries nativeQueries;
+    @Mock private MemberContactOverrideRepository overrideRepository;
 
     /** The real mapper: parsing is what this service does, so mocking it would test nothing. */
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private MemberService service() {
-        return new MemberService(businessApiClient, objectMapper, nativeQueries);
+        return new MemberService(businessApiClient, objectMapper, nativeQueries, overrideRepository);
     }
 
     @Test
@@ -39,6 +42,7 @@ class MemberServiceTest {
     void parsesTheMembership() {
         when(businessApiClient.get("/api/membership/validate/61010091080001"))
             .thenReturn("{\"firstName\":\"WILLIAM\",\"cardStatusCode\":\"59\"}");
+        when(overrideRepository.findByMembershipNumber("61010091080001")).thenReturn(Optional.empty());
 
         Map<String, Object> member = service().getMember("61010091080001");
 
