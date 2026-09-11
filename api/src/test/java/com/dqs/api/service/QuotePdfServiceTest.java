@@ -61,7 +61,7 @@ class QuotePdfServiceTest {
         return QuotationResponse.builder()
                 .id(107L).storeId(storeId).userId(1).statusId(3)
                 .dateTime(LocalDateTime.of(2026, 9, 10, 15, 30))
-                .dexpired(LocalDate.of(2026, 10, 1))
+                .expiryDate(LocalDate.of(2026, 10, 1))
                 .customerName("JUAN PEREZ").customerBusiness("ACME SA")
                 .customerMembership("70012345678901")
                 .quoteNo("SO-9001")
@@ -73,7 +73,7 @@ class QuotePdfServiceTest {
                 .id(500L).quotationId(107L).productId(code).description("ARROZ 5KG")
                 .qty(new BigDecimal("2.00")).rate(new BigDecimal("119"))
                 .signPrice(new BigDecimal("119")).amount(new BigDecimal("238"))
-                .taxPorcentaje(new BigDecimal("19")).taxAmount(new BigDecimal("38"))
+                .taxPercentage(new BigDecimal("19")).taxAmount(new BigDecimal("38"))
                 .taxIco(new BigDecimal("2"))
                 .department("01").category("0101")
                 .build();
@@ -381,13 +381,13 @@ class QuotePdfServiceTest {
     void excludedPicturesAreLeftOut() throws Exception {
         QuotationItemResponse included = line("1001");
         included.setPicture1(PIXEL);
-        included.setIncludepic(1);
+        included.setIncludeImage(1);
         stub(6401, "CR", "CRC", List.of(included), null, null);
         int withGallery = generate().length;
 
         QuotationItemResponse excluded = line("1001");
         excluded.setPicture1(PIXEL);
-        excluded.setIncludepic(0);
+        excluded.setIncludeImage(0);
         stub(6401, "CR", "CRC", List.of(excluded), null, null);
 
         // The Item Info drawer's "include image in the quote" flag.

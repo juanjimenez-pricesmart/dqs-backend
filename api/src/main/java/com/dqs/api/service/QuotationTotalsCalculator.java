@@ -123,7 +123,7 @@ public class QuotationTotalsCalculator {
 
             if (!noIva)  tax = tax.add(qty.multiply(nz(taxes.getTaxFactor())));
             if (usesIco) ico = ico.add(qty.multiply(nz(taxes.getTaxIco())));
-            exempt = exempt.add(nz(taxes.getExcentAmount()));
+            exempt = exempt.add(nz(taxes.getExemptionAmount()));
         }
 
         BigDecimal delivery = deliveryRepository.findByQuotation_Id(quotation.getId())

@@ -61,7 +61,7 @@ class DeliveryLogControllerTest {
     private static DeliveryLogResponse log() {
         return DeliveryLogResponse.builder()
                 .logId(9L).storeId(6101).statusId(2).createdBy(1)
-                .fecha("2026-09-15").deliveryCount(2)
+                .date("2026-09-15").deliveryCount(2)
                 .deliveries(List.of(Map.of("quotationId", 107L)))
                 .build();
     }

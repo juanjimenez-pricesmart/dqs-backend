@@ -96,10 +96,10 @@ class OmsPayloadBuilderTest {
                 .qty(new BigDecimal("2")).rate(new BigDecimal("119"))
                 .signPrice(new BigDecimal("119")).amount(new BigDecimal("238")).build();
         it.setTaxes(QuotationItemTaxes.builder().item(it)
-                .taxPorcentaje(new BigDecimal("19")).taxFactor(new BigDecimal("19"))
+                .taxPercentage(new BigDecimal("19")).taxFactor(new BigDecimal("19"))
                 .taxAmount(new BigDecimal("38")).taxIco(new BigDecimal("4")).build());
         it.setProduct(QuotationItemProduct.builder().item(it)
-                .description("ARROZ 5KG").weightEa(new BigDecimal("1.5"))
+                .description("ARROZ 5KG").weightPerUnit(new BigDecimal("1.5"))
                 .storageType("DRY").soldByWeight("N").build());
         return it;
     }

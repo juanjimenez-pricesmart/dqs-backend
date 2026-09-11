@@ -61,7 +61,7 @@ class QuotationTotalsCalculatorTest {
             .item(item)
             .taxFactor(new BigDecimal(taxFactor))
             .taxIco(new BigDecimal(taxIco))
-            .excentAmount(new BigDecimal(exempt))
+            .exemptionAmount(new BigDecimal(exempt))
             .build());
         return item;
     }

@@ -78,13 +78,13 @@ public class DeliveryLogService {
     private DeliveryLogResponse toResponse(Map<String, Object> row, List<Map<String, Object>> deliveries) {
         if (row == null) return null;
         return DeliveryLogResponse.builder()
-            .logId(MapUtils.toLong(row.get("logcargueid")))
-            .storeId(MapUtils.toInt(row.get("ps_tienda_id")))
-            .statusId(MapUtils.toInt(row.get("statusid")))
-            .createdBy(MapUtils.toInt(row.get("creado_por")))
-            .date(MapUtils.str(row.get("fecha")))
-            .closedAt(MapUtils.str(row.get("fechacierre")))
-            .sentAt(MapUtils.str(row.get("fechaenvio")))
+            .logId(MapUtils.toLongOrNull(row.get("logcargueid")))
+            .storeId(MapUtils.toIntOrNull(row.get("ps_tienda_id")))
+            .statusId(MapUtils.toIntOrNull(row.get("statusid")))
+            .createdBy(MapUtils.toIntOrNull(row.get("creado_por")))
+            .date(MapUtils.strOrNull(row.get("fecha")))
+            .closedAt(MapUtils.strOrNull(row.get("fechacierre")))
+            .sentAt(MapUtils.strOrNull(row.get("fechaenvio")))
             .deliveryCount(deliveries.size())
             .deliveries(deliveries)
             .build();

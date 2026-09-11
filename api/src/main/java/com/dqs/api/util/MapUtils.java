@@ -77,4 +77,25 @@ public final class MapUtils {
     public static <T> T coalesce(T a, T b) {
         return a != null ? a : b;
     }
+
+    /** Coerce to Integer; returns {@code null} for null input. */
+    public static Integer toIntOrNull(Object val) {
+        if (val == null) return null;
+        if (val instanceof Number) return ((Number) val).intValue();
+        try { return Integer.parseInt(val.toString()); }
+        catch (NumberFormatException e) { return null; }
+    }
+
+    /** Coerce to Long; returns {@code null} for null input. */
+    public static Long toLongOrNull(Object val) {
+        if (val == null) return null;
+        if (val instanceof Number) return ((Number) val).longValue();
+        try { return Long.parseLong(val.toString()); }
+        catch (NumberFormatException e) { return null; }
+    }
+
+    /** Coerce to String; returns {@code null} for null input. */
+    public static String strOrNull(Object val) {
+        return val != null ? val.toString() : null;
+    }
 }
