@@ -175,8 +175,12 @@ public class QuotationController {
     }
 
     @Operation(summary = "Actualizar una línea",
-               description = "Actualiza cantidad y/o porcentaje de exención en una sola llamada. Ambos campos son opcionales. " +
-                             "La exención se limita al impuesto de la línea y recalcula el monto exento.")
+               description = "Actualiza cantidad, porcentaje de exención, comentario, la bandera de imagen y — para productos " +
+                             "vendidos en denominaciones fijas, hoy solo la gift card 999979 — el monto elegido, en una sola " +
+                             "llamada. Todos los campos son opcionales. La exención se limita al impuesto de la línea y " +
+                             "recalcula el monto exento. La clave presetAmount se valida contra los montos configurados para " +
+                             "el país del club: un producto que no usa montos fijos, o una cifra que no está en la lista, " +
+                             "responde 400.")
     @PatchMapping("/{id}/items/{itemId}")
     public ResponseEntity<QuotationItemResponse> updateItem(
             @Parameter(description = "ID de la cotización") @PathVariable Long id,

@@ -80,6 +80,7 @@ class QuotationServiceTest {
     @Mock private OmsPayloadBuilder omsPayloadBuilder;
     @Mock private ItemService itemService;
     @Mock private QuotationTotalsCalculator totalsCalculator;
+    @Mock private PresetAmountService presetAmountService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -101,7 +102,7 @@ class QuotationServiceTest {
     private QuotationService service(String idpBaseUrl) {
         QuotationService s = new QuotationService(quotationRepository, quotationItemRepository,
                 quotationCancelRepository, omsService, omsPayloadBuilder, objectMapper,
-                itemService, totalsCalculator);
+                itemService, totalsCalculator, presetAmountService);
         set(s, "idpBaseUrl", idpBaseUrl);
         set(s, "clientId", "quotecenter");
         set(s, "clientSecret", "s3cr3t");
@@ -1599,5 +1600,143 @@ class QuotationServiceTest {
         assertThatThrownBy(() -> service().extendExpiry(404L))
                 .isInstanceOf(QuotationNotFoundException.class);
         verify(quotationRepository, never()).save(any(Quotation.class));
+    }
+
+    // ── Gift card: pricing a line from its preset amounts ─────────────────
+
+    private QuotationItem giftCardLine(Quotation q) {
+        QuotationItem it = QuotationItem.builder()
+                .id(700L).quotation(q).productId("999979")
+                .qty(BigDecimal.ONE).rate(BigDecimal.ZERO)
+                .signPrice(BigDecimal.ZERO).amount(BigDecimal.ZERO)
+                .comment("").includeImage(0).priceVariation(0).build();
+        it.setTaxes(QuotationItemTaxes.builder().item(it)
+                .taxPercentage(BigDecimal.ZERO).taxFactor(BigDecimal.ZERO)
+                .taxAmount(BigDecimal.ZERO).taxIco(BigDecimal.ZERO)
+                .exemptionPercentage(BigDecimal.ZERO).exemptionAmount(BigDecimal.ZERO).build());
+        it.setProduct(QuotationItemProduct.builder().item(it).description("GIFT CARD").build());
+        return it;
+    }
+
+    private void offers(String... localAmounts) {
+        when(presetAmountService.getForProductAndClub(eq("999979"), any())).thenReturn(
+                java.util.Arrays.stream(localAmounts)
+                        .map(a -> com.dqs.api.dto.PresetAmountResponse.builder()
+                                .localAmount(new BigDecimal(a)).build())
+                        .toList());
+    }
+
+    @Test
+    @DisplayName("choosing an amount prices the gift card and its line total")
+    void choosingAnAmountPricesTheLine() {
+        Quotation q = quotation(1);
+        QuotationItem card = giftCardLine(q);
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(q));
+        when(quotationItemRepository.findById(700L)).thenReturn(Optional.of(card));
+        repoReturnsSelf();
+        offers("10000.00", "25000.00", "50000.00");
+
+        service().updateItem(107L, 700L, Map.of("presetAmount", "25000.00"));
+
+        assertThat(card.getRate()).isEqualByComparingTo("25000.00");
+        // sign_price too: applyQty and the totals calculator both recompute
+        // from it, so rate alone would reprice the card to zero on the next
+        // quantity change.
+        assertThat(card.getSignPrice()).isEqualByComparingTo("25000.00");
+        assertThat(card.getAmount()).isEqualByComparingTo("25000.00");
+    }
+
+    @Test
+    @DisplayName("the amount survives a later quantity change instead of collapsing to zero")
+    void theAmountSurvivesAQuantityChange() {
+        Quotation q = quotation(1);
+        QuotationItem card = giftCardLine(q);
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(q));
+        when(quotationItemRepository.findById(700L)).thenReturn(Optional.of(card));
+        repoReturnsSelf();
+        offers("10000.00");
+
+        service().updateItem(107L, 700L, Map.of("presetAmount", "10000.00"));
+        service().updateItem(107L, 700L, Map.of("qty", "3"));
+
+        assertThat(card.getAmount()).isEqualByComparingTo("30000.00");
+    }
+
+    @Test
+    @DisplayName("amount and quantity in one call price the line off the new amount")
+    void amountAndQuantityTogether() {
+        Quotation q = quotation(1);
+        QuotationItem card = giftCardLine(q);
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(q));
+        when(quotationItemRepository.findById(700L)).thenReturn(Optional.of(card));
+        repoReturnsSelf();
+        offers("10000.00");
+
+        // The amount is applied first; the other order would multiply the old
+        // price by the new quantity.
+        service().updateItem(107L, 700L, Map.of("presetAmount", "10000.00", "qty", "2"));
+
+        assertThat(card.getAmount()).isEqualByComparingTo("20000.00");
+    }
+
+    @Test
+    @DisplayName("an amount the club does not offer is refused")
+    void anAmountNotOnTheListIsRefused() {
+        Quotation q = quotation(1);
+        QuotationItem card = giftCardLine(q);
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(q));
+        when(quotationItemRepository.findById(700L)).thenReturn(Optional.of(card));
+        offers("10000.00", "25000.00", "50000.00");
+
+        // Legacy takes whatever the browser posts, so a crafted request can
+        // sell a $100 card for one colón.
+        assertThatThrownBy(() -> service().updateItem(107L, 700L, Map.of("presetAmount", "1")))
+                .isInstanceOf(com.dqs.api.exception.InvalidPresetAmountException.class);
+        assertThat(card.getRate()).isEqualByComparingTo("0");
+        verify(quotationItemRepository, never()).save(any(QuotationItem.class));
+    }
+
+    @Test
+    @DisplayName("an ordinary product cannot be repriced through this key at all")
+    void anOrdinaryProductCannotBeRepriced() {
+        Quotation q = quotation(1);
+        QuotationItem ordinary = item(q, 500L, "1001");
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(q));
+        when(quotationItemRepository.findById(500L)).thenReturn(Optional.of(ordinary));
+
+        // Otherwise presetAmount would be a price field on every line.
+        assertThatThrownBy(() -> service().updateItem(107L, 500L, Map.of("presetAmount", "1")))
+                .isInstanceOf(com.dqs.api.exception.InvalidPresetAmountException.class);
+        assertThat(ordinary.getRate()).isEqualByComparingTo("100");
+    }
+
+    @Test
+    @DisplayName("a club with no amounts configured cannot price a card either")
+    void noAmountsConfiguredRefusesEverything() {
+        Quotation q = quotation(1);
+        QuotationItem card = giftCardLine(q);
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(q));
+        when(quotationItemRepository.findById(700L)).thenReturn(Optional.of(card));
+        when(presetAmountService.getForProductAndClub(eq("999979"), any())).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service().updateItem(107L, 700L, Map.of("presetAmount", "10000.00")))
+                .isInstanceOf(com.dqs.api.exception.InvalidPresetAmountException.class);
+    }
+
+    @Test
+    @DisplayName("a line updated without the key keeps the price it had")
+    void anUpdateWithoutTheKeyLeavesThePriceAlone() {
+        Quotation q = quotation(1);
+        QuotationItem card = giftCardLine(q);
+        card.setRate(new BigDecimal("10000.00"));
+        card.setSignPrice(new BigDecimal("10000.00"));
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(q));
+        when(quotationItemRepository.findById(700L)).thenReturn(Optional.of(card));
+        repoReturnsSelf();
+
+        service().updateItem(107L, 700L, Map.of("comment", "para el cliente"));
+
+        assertThat(card.getRate()).isEqualByComparingTo("10000.00");
+        verify(presetAmountService, never()).getForProductAndClub(any(), any());
     }
 }

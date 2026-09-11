@@ -1,8 +1,10 @@
 package com.dqs.api.service;
 
 import com.dqs.api.dto.*;
+import com.dqs.api.exception.InvalidPresetAmountException;
 import com.dqs.api.exception.QuotationAlreadySubmittedException;
 import com.dqs.api.util.MapUtils;
+import com.dqs.api.util.SpecialItems;
 import com.dqs.api.exception.QuotationNotFoundException;
 import com.dqs.api.model.*;
 import com.dqs.api.repository.QuotationItemRepository;
@@ -39,6 +41,7 @@ public class QuotationService {
     private final ObjectMapper objectMapper;
     private final ItemService itemService;
     private final QuotationTotalsCalculator totalsCalculator;
+    private final PresetAmountService presetAmountService;
 
     @Value("${idp.base-url}")
     private String idpBaseUrl;
@@ -333,14 +336,16 @@ public class QuotationService {
     }
 
     /**
-     * Updates one line: quantity, exemption percentage, per-item comment and
-     * the print-image flag. Every key is optional, so a caller sends only what
-     * it changed.
+     * Updates one line: quantity, exemption percentage, per-item comment, the
+     * print-image flag and — for a product sold at fixed denominations — the
+     * chosen amount. Every key is optional, so a caller sends only what it
+     * changed.
      *
      * Legacy spreads this across three endpoints — orders/saveitemqty,
      * orders/savecomment and orders/saveincludepic — each re-reading and
      * re-writing the same row. One endpoint for one row keeps the recompute
-     * rules in a single place.
+     * rules in a single place. Legacy's saveitemqty carries its itemAmount too,
+     * so the gift card rides the same call there as it does here.
      */
     @Transactional
     public QuotationItemResponse updateItem(Long quotationId, Long itemId, java.util.Map<String, Object> body) {
@@ -349,6 +354,13 @@ public class QuotationService {
                 .orElseThrow(() -> new QuotationNotFoundException(itemId));
         if (!item.getQuotation().getId().equals(quotationId)) {
             throw new IllegalArgumentException("Item " + itemId + " does not belong to quotation " + quotationId);
+        }
+
+        // Before the quantity, because it sets the unit price the quantity is
+        // then multiplied by. The other order would price the line off the old
+        // amount and leave it there until the next edit.
+        if (body.get("presetAmount") != null) {
+            applyPresetAmount(item, new BigDecimal(body.get("presetAmount").toString()));
         }
 
         if (body.get("qty") != null) {
@@ -383,6 +395,47 @@ public class QuotationService {
         // The lines changed, so the totals are stale by definition.
         totalsCalculator.recalculateFor(quotationId);
         return response;
+    }
+
+    /**
+     * Prices a gift card at one of the amounts it is actually sold at.
+     *
+     * Two things differ from legacy, both on purpose.
+     *
+     * It writes sign_price as well as rate. Legacy's updateItem sets only rate
+     * and recomputes with `amount = qty * rate`; ours recomputes from
+     * sign_price (applyQty, and QuotationTotalsCalculator with it), so setting
+     * rate alone would hold until the next quantity change and then silently
+     * reprice the card to zero.
+     *
+     * And the figure is checked against the amounts configured for the club's
+     * country. Legacy takes whatever the browser posts —
+     * OrdersItemModel::updateItem only asks that it be numeric and non-empty —
+     * so a crafted request can sell a $100 gift card for one colón. The list is
+     * three rows and already loaded for the dropdown, so checking it costs a
+     * query we were making anyway.
+     */
+    private void applyPresetAmount(QuotationItem item, BigDecimal amount) {
+        String productId = item.getProductId();
+        if (!SpecialItems.has(productId, SpecialItems.Trait.PRESET_AMOUNT)) {
+            throw new InvalidPresetAmountException(
+                    "Product " + productId + " is not sold at preset amounts");
+        }
+
+        Integer clubId = item.getQuotation() != null ? item.getQuotation().getStoreId() : null;
+        boolean offered = presetAmountService.getForProductAndClub(productId, clubId).stream()
+                .anyMatch(preset -> preset.getLocalAmount() != null
+                        && preset.getLocalAmount().compareTo(amount) == 0);
+        if (!offered) {
+            throw new InvalidPresetAmountException(
+                    "Amount " + amount.toPlainString() + " is not offered for product "
+                    + productId + " at club " + clubId);
+        }
+
+        item.setRate(amount);
+        item.setSignPrice(amount);
+        BigDecimal qty = MapUtils.coalesce(item.getQty(), BigDecimal.ONE);
+        item.setAmount(qty.multiply(amount).setScale(4, java.math.RoundingMode.HALF_UP));
     }
 
     private void applyQty(QuotationItem item, BigDecimal newQty) {
