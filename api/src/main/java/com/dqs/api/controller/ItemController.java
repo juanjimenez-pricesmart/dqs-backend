@@ -1,6 +1,8 @@
 package com.dqs.api.controller;
 
+import com.dqs.api.dto.PresetAmountResponse;
 import com.dqs.api.service.ItemService;
+import com.dqs.api.service.PresetAmountService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -10,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -20,6 +23,7 @@ import java.util.Map;
 public class ItemController {
 
     private final ItemService itemService;
+    private final PresetAmountService presetAmountService;
 
     @Operation(summary = "Buscar ítem por código", description = "Retorna precio, peso, impuestos y datos del producto para un club específico")
     @GetMapping("/{itemCode}/club/{clubId}")
@@ -28,6 +32,19 @@ public class ItemController {
             @Parameter(description = "ID del club/tienda") @PathVariable Integer clubId) {
         log.info("[ItemController] GET /api/v1/items/{}/club/{}", itemCode, clubId);
         return ResponseEntity.ok(itemService.getItemByCode(itemCode, clubId));
+    }
+
+    @Operation(summary = "Montos preseleccionados del ítem",
+               description = "Denominaciones fijas con las que se vende un producto en el país del club — hoy solo " +
+                             "la gift card 999979. Equivale a orders/get_preset_amounts del legacy. Retorna lista " +
+                             "vacía si el producto no maneja montos fijos, si el club no existe o si su país no " +
+                             "tiene montos configurados; la pantalla no distingue entre los tres casos.")
+    @GetMapping("/{itemCode}/club/{clubId}/preset-amounts")
+    public ResponseEntity<List<PresetAmountResponse>> presetAmounts(
+            @Parameter(description = "Código del producto") @PathVariable String itemCode,
+            @Parameter(description = "ID del club/tienda") @PathVariable Integer clubId) {
+        log.info("[ItemController] GET /api/v1/items/{}/club/{}/preset-amounts", itemCode, clubId);
+        return ResponseEntity.ok(presetAmountService.getForProductAndClub(itemCode, clubId));
     }
 
     @Operation(summary = "Buscar ítems por descripción", description = "Búsqueda de productos por texto en el nombre/descripción para un club")

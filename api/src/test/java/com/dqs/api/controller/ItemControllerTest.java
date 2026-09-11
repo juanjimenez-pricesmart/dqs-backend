@@ -1,7 +1,9 @@
 package com.dqs.api.controller;
 
 import com.dqs.api.exception.GlobalExceptionHandler;
+import com.dqs.api.dto.PresetAmountResponse;
 import com.dqs.api.service.ItemService;
+import com.dqs.api.service.PresetAmountService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,6 +15,7 @@ import org.mockito.quality.Strictness;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -32,12 +35,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ItemControllerTest {
 
     @Mock private ItemService itemService;
+    @Mock private PresetAmountService presetAmountService;
 
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
-        mvc = MockMvcBuilders.standaloneSetup(new ItemController(itemService))
+        mvc = MockMvcBuilders.standaloneSetup(new ItemController(itemService, presetAmountService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -63,6 +67,35 @@ class ItemControllerTest {
         mvc.perform(get("/api/v1/items/search").param("clubId", "6101").param("q", "arroz"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].item_code").value("1001"));
+    }
+
+    @Test
+    @DisplayName("the preset amounts hang off the same code-and-club route")
+    void presetAmountsAreScopedToAClub() throws Exception {
+        when(presetAmountService.getForProductAndClub("999979", 6401)).thenReturn(List.of(
+                PresetAmountResponse.builder()
+                        .denominationUsd(new BigDecimal("20.00")).localAmount(new BigDecimal("10000.00"))
+                        .displayOrder(1).currencyCode("CRC").currencySymbol("₡").build()));
+
+        // The amount that goes on the line is the local one; the denomination
+        // is what the customer recognises. Both have to survive the wire.
+        mvc.perform(get("/api/v1/items/999979/club/6401/preset-amounts"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].denominationUsd").value(20.00))
+                .andExpect(jsonPath("$[0].localAmount").value(10000.00))
+                .andExpect(jsonPath("$[0].currencySymbol").value("₡"));
+    }
+
+    @Test
+    @DisplayName("a product with no preset amounts answers an empty list, not 404")
+    void noPresetAmountsIsAnEmptyList() throws Exception {
+        when(presetAmountService.getForProductAndClub("1001", 6401)).thenReturn(List.of());
+
+        // The screen asks for every item it opens and shows the dropdown only
+        // when something comes back; a 404 would have to be caught instead.
+        mvc.perform(get("/api/v1/items/1001/club/6401/preset-amounts"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
     }
 
     @Test
