@@ -141,6 +141,21 @@ public class QuotationController {
         return ResponseEntity.ok(bankTransferNoticeService.check(id, paymentMethod));
     }
 
+    @Operation(summary = "Guardar comentario de cabecera",
+               description = "Guarda la nota general de la cotización, la que se imprime en el PDF. " +
+                             "Equivale a orders/savecomment del legacy con item == 0. " +
+                             "El comentario por línea va en PATCH /{id}/items/{itemId} con la clave comment.")
+    @PatchMapping("/{id}/comment")
+    public ResponseEntity<Void> updateComment(
+            @Parameter(description = "ID de la cotización") @PathVariable Long id,
+            @RequestBody java.util.Map<String, Object> body) {
+        String comment = body.get("comment") != null ? body.get("comment").toString() : null;
+        log.info("[QuotationController] PATCH /api/v1/quotations/{}/comment length={}", id,
+                comment == null ? 0 : comment.length());
+        quotationService.updateComment(id, comment);
+        return ResponseEntity.noContent().build();
+    }
+
     @Operation(summary = "Listar ítems", description = "Retorna todos los ítems de la cotización ordenados por productId")
     @GetMapping("/{id}/items")
     public ResponseEntity<List<QuotationItemResponse>> getItems(

@@ -478,6 +478,25 @@ public class QuotationService {
         log.info("[QuotationService] quotation cancelled id={} reasonId={}", id, reasonId);
     }
 
+    // ── Header comment ────────────────────────────────────────────────────
+
+    /**
+     * Saves the quotation header note — legacy's orders/savecomment with
+     * item == 0. The per-line note goes through updateItem's `comment` key,
+     * which is the same endpoint's item != 0 branch.
+     *
+     * No status guard: legacy lets the note be edited on any quotation, and it
+     * changes nothing that is invoiced or sent to OMS.
+     */
+    @Transactional
+    public void updateComment(Long id, String comment) {
+        Quotation quotation = findOrThrow(id);
+        quotation.setComments(comment == null || comment.isBlank() ? null : comment);
+        quotationRepository.save(quotation);
+        log.info("[QuotationService] header comment saved id={} length={}", id,
+                comment == null ? 0 : comment.length());
+    }
+
     // ── Get items ─────────────────────────────────────────────────────────
 
     public List<QuotationItemResponse> getItems(Long quotationId) {
@@ -611,7 +630,8 @@ public class QuotationService {
                 .userId(q.getUserId())
                 .statusId(q.getStatusId())
                 .dateTime(q.getDateTime())
-                .expiryDate(q.getExpiryDate());
+                .expiryDate(q.getExpiryDate())
+                .comments(q.getComments());
 
         if (c != null) {
             b.customerName(c.getCustomerName())

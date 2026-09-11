@@ -278,6 +278,16 @@ public class QuotePdfService {
           .append(delivery != null ? " + delivery" : "").append("</div>");
         sb.append("</div>");
 
+        // ── Header comment ──
+        // Legacy prints it right after the item table, before the image
+        // gallery (Orders.php:4372-4376). It only ever existed in the browser's
+        // localStorage until now, so no PDF has carried it.
+        if (quote.getComments() != null && !quote.getComments().isBlank()) {
+            sb.append("<div style=\"clear:both;font-size:10px;margin-top:10px;white-space:pre-wrap;\">")
+              .append(esc(quote.getComments()))
+              .append("</div>");
+        }
+
         // ── Gallery ──
         List<QuotationItemResponse> withImages = items.stream()
             .filter(i -> i.getPicture1() != null && !i.getPicture1().isBlank()
@@ -294,6 +304,11 @@ public class QuotePdfService {
                 sb.append("<p style=\"font-weight:600;\">").append(esc(item.getProductId())).append("</p>");
                 sb.append("<img src=\"").append(esc(item.getPicture1())).append("\"/>");
                 sb.append("<p>").append(esc(item.getDescription())).append("</p>");
+                // Per-line note, under its image, as legacy's gallery does
+                // (Orders.php:4419-4422). The column was already stored.
+                if (item.getComment() != null && !item.getComment().isBlank()) {
+                    sb.append("<p style=\"font-size:8px;\">").append(esc(item.getComment())).append("</p>");
+                }
                 sb.append("</div>");
             }
             sb.append("</div>");
