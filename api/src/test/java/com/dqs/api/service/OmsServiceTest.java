@@ -50,6 +50,10 @@ import static org.mockito.Mockito.when;
  * The service also replaces the JVM's default SSL socket factory and hostname
  * verifier, process-wide, on every membership lookup. These tests put both back
  * afterwards so the rest of the suite is not left with TLS verification off.
+ *
+ * The `getQuotationContext` and `sendPayload` aliases were dropped in #35, and
+ * the two tests that covered them went with them — pointed at the new names
+ * they duplicated the cases above while still claiming to check a delegation.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -414,15 +418,6 @@ class OmsServiceTest {
         verify(nativeQueries, never()).list(contains("ps_socios_fel"), any(), any());
     }
 
-    @Test
-    @DisplayName("the old method name still answers, so nothing broke during the migration")
-    void theLegacyMethodNameDelegates() {
-        stubDatabase(clubRow("CO"), 1, Map.of("id", 1, "email", "v@pricesmart.com"));
-        String url = startServer(200, MEMBER_JSON);
-
-        assertThat(service(url).buildOmsContext(107L, 6101, "70012345678901", 1))
-                .containsKeys("club", "member", "user", "exchange_rate");
-    }
 
     // ── Submitting an order ───────────────────────────────────────────────
 
@@ -471,13 +466,6 @@ class OmsServiceTest {
         assertThat(response).startsWith("{\"error\":").contains("Connection refused");
     }
 
-    @Test
-    @DisplayName("the old send method still delegates to the new one")
-    void sendPayloadDelegates() {
-        String url = startServer(200, "{\"orderId\":1}");
-
-        assertThat(service(url).submitOrder(Map.of(), "CR", "tok-123")).isEqualTo("{\"orderId\":1}");
-    }
 
     // ── Status history ────────────────────────────────────────────────────
 
