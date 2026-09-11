@@ -13,7 +13,10 @@ import org.mockito.quality.Strictness;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -39,7 +42,7 @@ class PdfControllerTest {
     @Test
     @DisplayName("the PDF downloads as an attachment named after the quotation")
     void pdfDownloadsAsAttachment() throws Exception {
-        when(quotePdfService.generate(107L)).thenReturn(new byte[] { '%', 'P', 'D', 'F' });
+        when(quotePdfService.generate(eq(107L), any())).thenReturn(new byte[] { '%', 'P', 'D', 'F' });
 
         mvc.perform(get("/api/v1/quotations/107/pdf"))
                 .andExpect(status().isOk())
@@ -51,12 +54,34 @@ class PdfControllerTest {
     @Test
     @DisplayName("a PDF that cannot be built is an empty 500, not a corrupt download")
     void pdfFailureIsAnEmptyServerError() throws Exception {
-        when(quotePdfService.generate(anyLong())).thenThrow(new RuntimeException("no template"));
+        when(quotePdfService.generate(anyLong(), any())).thenThrow(new RuntimeException("no template"));
 
         // A 200 with no bytes would save to disk and open as a broken file,
         // which reads to the operator as our bug rather than as a failure.
         mvc.perform(get("/api/v1/quotations/107/pdf"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(content().string(""));
+    }
+
+    @Test
+    @DisplayName("the sort the operator picked reaches the PDF")
+    void sortByReachesTheService() throws Exception {
+        when(quotePdfService.generate(eq(107L), any())).thenReturn(new byte[] { '%', 'P', 'D', 'F' });
+
+        mvc.perform(get("/api/v1/quotations/107/pdf?sortBy=4")).andExpect(status().isOk());
+
+        verify(quotePdfService).generate(107L, 4);
+    }
+
+    @Test
+    @DisplayName("no sortBy at all is passed through as null, for the service to default")
+    void anAbsentSortIsNull() throws Exception {
+        // Legacy's default is department, not code, and deciding that here
+        // would put the rule in two places.
+        when(quotePdfService.generate(eq(107L), any())).thenReturn(new byte[] { '%', 'P', 'D', 'F' });
+
+        mvc.perform(get("/api/v1/quotations/107/pdf")).andExpect(status().isOk());
+
+        verify(quotePdfService).generate(107L, null);
     }
 }

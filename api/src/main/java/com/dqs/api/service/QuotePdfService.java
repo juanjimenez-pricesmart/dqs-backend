@@ -3,16 +3,20 @@ package com.dqs.api.service;
 import com.dqs.api.dto.QuotationItemResponse;
 import com.dqs.api.dto.QuotationResponse;
 import com.dqs.api.util.ClubCapabilities;
+import com.dqs.api.util.ClubMarketingFooter;
+import com.dqs.api.util.QuoteItemSort;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import com.dqs.api.repository.support.NativeQueries;
+import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @Slf4j
@@ -24,14 +28,28 @@ public class QuotePdfService {
     private final FiscalService    fiscalService;
     private final DeliveryService  deliveryService;
     private final NativeQueries   nativeQueries;
+    private final MessageSource   messageSource;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("MMM d, yyyy");
     private static final String[] FEL_COUNTRIES = {"SLV", "SV", "CR", "CRC"};
 
+    private static final String SITE_URL   = "https://www.pricesmart.com/";
+    private static final String SITE_LABEL = "www.pricesmart.com";
+
     // ── Public entry point ────────────────────────────────────────────────────
 
+    /** The PDF in legacy's default order, department first. */
     public byte[] generate(Long quotationId) throws Exception {
-        log.info("[QuotePdfService] generate quotationId={}", quotationId);
+        return generate(quotationId, null);
+    }
+
+    /**
+     * @param sortBy which of legacy's four "Ordenar por" radios to honour, 1-4;
+     *               null for the default. See {@link QuoteItemSort}.
+     */
+    public byte[] generate(Long quotationId, Integer sortBy) throws Exception {
+        QuoteItemSort sort = QuoteItemSort.fromCode(sortBy);
+        log.info("[QuotePdfService] generate quotationId={} sortBy={} ({})", quotationId, sortBy, sort);
 
         // 1. Collect data
         QuotationResponse quote = quotationService.getById(quotationId);
@@ -44,10 +62,13 @@ public class QuotePdfService {
         String country  = str(store, "pais_iso2");
         boolean hasFel  = isFelCountry(country);
 
-        // 2. Filter delivery item from regular items
-        List<QuotationItemResponse> items = allItems.stream()
+        // 2. Filter the delivery item out, then order what is left the way the
+        //    operator asked. The sort comes after the filter for the same
+        //    reason legacy's does not need to: the delivery SKU is not a line
+        //    on our table, so where it would have sorted to is irrelevant.
+        List<QuotationItemResponse> items = sort.sort(allItems.stream()
             .filter(i -> com.dqs.api.util.SpecialItems.isRegularLine(i.getProductId()))
-            .toList();
+            .toList());
 
         // 3. Totals
         int storeId = quote.getStoreId() != null ? quote.getStoreId() : 0;
@@ -90,7 +111,7 @@ public class QuotePdfService {
         }
 
         // 4. Build HTML
-        String html = buildHtml(quote, items, store, fiscal, delivery,
+        String html = buildHtml(quote, items, store, fiscal, delivery, storeId,
             currency, hasFel, isColombia, vatInclusive, isBarbadosStore,
             subtotal, totalTax, totalIco, coBase, deliveryAmt, total);
 
@@ -114,6 +135,7 @@ public class QuotePdfService {
             Map<String, Object> store,
             Map<String, Object> fiscal,
             Map<String, Object> delivery,
+            int storeId,
             String currency,
             boolean hasFel,
             boolean isColombia,
@@ -160,6 +182,7 @@ public class QuotePdfService {
                 .gallery-item { width: 22%; border: 1px solid #e0e4ea; border-radius: 4px; padding: 6px; text-align: center; page-break-inside: avoid; }
                 .gallery-item img { max-width: 100%; max-height: 90px; object-fit: contain; display: block; margin: 4px auto; }
                 .gallery-item p { font-size: 8px; color: #555; margin-top: 3px; }
+                .marketing { margin-top: 20px; padding-top: 8px; border-top: 1px solid #000; font-size: 10px; color: #333; }
                 .footer { margin-top: 20px; padding-top: 10px; border-top: 1px solid #e0e4ea; font-size: 8px; color: #999; text-align: center; }
                 .badge-delivery { color: #1d6fcf; font-weight: 600; }
                 .page-break { page-break-before: always; }
@@ -314,6 +337,11 @@ public class QuotePdfService {
             sb.append("</div>");
         }
 
+        // ── Marketing footer ──
+        // Legacy injects it just above the "Document generated" line, which is
+        // what our .footer div is; same position here.
+        appendMarketingFooter(sb, storeId, total);
+
         // ── Footer ──
         sb.append("<div class=\"footer\">PriceSmart B2B &#8212; This quote is valid until ")
           .append(quote.getExpiryDate() != null ? quote.getExpiryDate().format(DATE_FMT) : "N/A")
@@ -321,6 +349,38 @@ public class QuotePdfService {
 
         sb.append("</body></html>");
         return sb.toString();
+    }
+
+    // ── Marketing footer ──────────────────────────────────────────────────────
+
+    /**
+     * The invitation to buy online, printed only for a club that has a
+     * threshold and only for a quote at or under it.
+     *
+     * One deliberate difference from legacy, which builds the same block in
+     * imprimir() (views/orders/edit.php:4387-4396): there the anchor's body is
+     * a single space, so the address it links to is never visible text and the
+     * sentence reads "...visit the site , where you can...". In a browser popup
+     * that is merely odd; in a PDF a link nobody can see or click is the whole
+     * footer failing at its one job, so the address is printed. Revert by
+     * replacing SITE_LABEL with a space.
+     */
+    private void appendMarketingFooter(StringBuilder sb, int storeId, BigDecimal total) {
+        if (!ClubMarketingFooter.printsFooter(storeId, total)) return;
+
+        Locale locale = ClubMarketingFooter.localeFor(storeId);
+        sb.append("<div class=\"marketing\">")
+          .append("<strong>").append(esc(msg("quote.footer.marketing.part1", locale))).append("</strong> ")
+          .append("<a href=\"").append(SITE_URL).append("\" style=\"color:#1e90ff;\">").append(SITE_LABEL).append("</a>")
+          .append(esc(msg("quote.footer.marketing.part2", locale)))
+          .append("<br/>").append(esc(msg("quote.footer.marketing.part3", locale)))
+          .append("<br/>").append(esc(msg("quote.footer.marketing.delivery", locale)))
+          .append("</div>");
+    }
+
+    /** A missing key costs one line of the footer, not the whole PDF. */
+    private String msg(String key, Locale locale) {
+        return messageSource.getMessage(key, null, "", locale);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
