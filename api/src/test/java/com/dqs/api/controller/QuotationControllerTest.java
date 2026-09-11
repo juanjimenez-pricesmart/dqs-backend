@@ -311,6 +311,21 @@ class QuotationControllerTest {
     }
 
     @Test
+    @DisplayName("an amount the product is not sold at answers 400, not 500")
+    void anInvalidPresetAmountIsABadRequest() throws Exception {
+        when(quotationService.updateItem(eq(107L), eq(700L), any()))
+                .thenThrow(new com.dqs.api.exception.InvalidPresetAmountException(
+                        "Amount 1 is not offered for product 999979 at club 6401"));
+
+        // The figure the caller sent is wrong, not our state. A 500 would read
+        // to the screen as an outage and it would retry.
+        mvc.perform(patch("/api/v1/quotations/107/items/700")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"presetAmount\":1}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").exists());
+    }
+
+    @Test
     @DisplayName("extending the expiry answers the quotation carrying its new date")
     void extendExpiryReturnsTheNewDate() throws Exception {
         when(quotationService.extendExpiry(107L)).thenReturn(
