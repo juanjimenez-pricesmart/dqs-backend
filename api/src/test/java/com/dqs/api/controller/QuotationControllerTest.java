@@ -329,6 +329,31 @@ class QuotationControllerTest {
     }
 
     @Test
+    @DisplayName("the checked lines travel as one request and the answer says how many went")
+    void bulkDeleteAnswersTheCount() throws Exception {
+        when(quotationService.deleteItems(eq(107L), any())).thenReturn(java.util.Map.of("deleted", 3));
+
+        mvc.perform(delete("/api/v1/quotations/107/items")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"itemIds\":[1,2,3]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deleted").value(3));
+
+        verify(quotationService).deleteItems(107L, java.util.List.of(1L, 2L, 3L));
+    }
+
+    @Test
+    @DisplayName("a body with no itemIds deletes nothing rather than failing")
+    void bulkDeleteWithoutIdsIsHarmless() throws Exception {
+        when(quotationService.deleteItems(eq(107L), any())).thenReturn(java.util.Map.of("deleted", 0));
+
+        mvc.perform(delete("/api/v1/quotations/107/items")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isOk());
+
+        verify(quotationService).deleteItems(107L, java.util.List.of());
+    }
+
+    @Test
     @DisplayName("a sent quotation answers who received it")
     void emailAnswersTheRecipient() throws Exception {
         when(quoteEmailService.send(eq(107L), any())).thenReturn("socio@example.com");

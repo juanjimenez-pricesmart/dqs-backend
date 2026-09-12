@@ -246,6 +246,25 @@ public class QuotationController {
         return ResponseEntity.ok(quotationService.updateItemQty(id, itemId, body));
     }
 
+    @Operation(summary = "Eliminar varios ítems",
+               description = "Elimina en una sola llamada todas las líneas marcadas — equivale a itemsdel() del " +
+                             "legacy. Una transacción y un recálculo de totales, no uno por línea. Los ids que ya " +
+                             "no existen se ignoran y la respuesta dice cuántas filas se borraron de verdad. " +
+                             "Una línea que pertenece a su propio panel, como el envío, responde 400: quitarla sin " +
+                             "su registro dejaría algo que ninguna pantalla puede editar.")
+    @DeleteMapping("/{id}/items")
+    public ResponseEntity<java.util.Map<String, Object>> deleteItems(
+            @Parameter(description = "ID de la cotización") @PathVariable Long id,
+            @RequestBody java.util.Map<String, Object> body) {
+        Object raw = body.get("itemIds");
+        List<Long> itemIds = raw instanceof List<?> list
+                ? list.stream().filter(java.util.Objects::nonNull)
+                      .map(v -> Long.valueOf(v.toString())).toList()
+                : List.of();
+        log.info("[QuotationController] DELETE /api/v1/quotations/{}/items count={}", id, itemIds.size());
+        return ResponseEntity.ok(quotationService.deleteItems(id, itemIds));
+    }
+
     @Operation(summary = "Eliminar ítem", description = "Elimina un ítem de la cotización por su ID de ítem")
     @DeleteMapping("/{id}/items/{itemId}")
     public ResponseEntity<Void> deleteItem(
