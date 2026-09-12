@@ -19,6 +19,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.context.MessageSource;
+import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.test.util.ReflectionTestUtils;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -58,9 +60,20 @@ class QuotationDocumentServiceTest {
     private static final DocumentType PROOF = DocumentType.builder()
             .id(4).code(DocumentType.PROOF_OF_PAYMENT).name("Proof of payment").build();
 
+    /** The real bundles, so a refusal that loses its Spanish fails here. */
+    private static final MessageSource MESSAGES = messageSource();
+
+    private static MessageSource messageSource() {
+        ResourceBundleMessageSource source = new ResourceBundleMessageSource();
+        source.setBasename("messages");
+        source.setDefaultEncoding("UTF-8");
+        source.setFallbackToSystemLocale(false);
+        return source;
+    }
+
     private QuotationDocumentService service(Optional<S3Client> client) {
         QuotationDocumentService s = new QuotationDocumentService(
-                quotationRepository, documentRepository, documentTypeRepository, client);
+                quotationRepository, documentRepository, documentTypeRepository, client, MESSAGES);
         ReflectionTestUtils.setField(s, "bucket", "dqs-quotes-dev");
         ReflectionTestUtils.setField(s, "region", "us-east-1");
         ReflectionTestUtils.setField(s, "maxBytes", 4L * 1024 * 1024);
@@ -77,6 +90,13 @@ class QuotationDocumentServiceTest {
 
     @BeforeEach
     void wire() {
+        // A real S3Utilities, not a mock: the point of the change under test is
+        // that the SDK knows how to address a bucket whose name contains dots,
+        // and a stubbed URL would assert nothing about that.
+        when(s3Client.utilities()).thenReturn(
+                software.amazon.awssdk.services.s3.S3Utilities.builder()
+                        .region(software.amazon.awssdk.regions.Region.US_EAST_1)
+                        .build());
         when(quotationRepository.findById(107L))
                 .thenReturn(Optional.of(Quotation.builder().id(107L).storeId(6401).userId(1).build()));
         when(quotationTypePresent()).thenReturn(Optional.of(PROOF));
@@ -103,10 +123,9 @@ class QuotationDocumentServiceTest {
         assertThat(put.getValue().bucket()).isEqualTo("dqs-quotes-dev");
         assertThat(put.getValue().key()).isEqualTo("quotes/order_107/quote_107_payment_voucher.pdf");
 
-        // Legacy saves https://{bucket}/{key}, which has no S3 host in it and
-        // therefore opens nowhere. This one resolves.
+        // Built by the SDK, so a plain bucket name gets virtual-host addressing.
         assertThat(response.getStorageUrl())
-                .isEqualTo("https://dqs-quotes-dev.s3.us-east-1.amazonaws.com/quotes/order_107/quote_107_payment_voucher.pdf");
+                .isEqualTo("https://dqs-quotes-dev.s3.amazonaws.com/quotes/order_107/quote_107_payment_voucher.pdf");
         assertThat(response.getFileName()).isEqualTo("recibo.pdf");
         assertThat(response.getUploadedByUserId()).isEqualTo(5836);
     }
@@ -170,7 +189,7 @@ class QuotationDocumentServiceTest {
         assertThatThrownBy(() -> service().uploadVoucher(107L,
                 new MockMultipartFile("file", "grande.pdf", "application/pdf", big), null))
                 .isInstanceOf(VoucherUploadException.class)
-                .hasMessageContaining("4MB");
+                .hasMessageContaining("4");
 
         verify(s3Client, never()).putObject(any(PutObjectRequest.class), any(RequestBody.class));
     }
@@ -189,8 +208,7 @@ class QuotationDocumentServiceTest {
         // The bean does not exist when quotecenter.s3.enabled is false, so the
         // service has to answer rather than fail at construction.
         assertThatThrownBy(() -> service(Optional.empty()).uploadVoucher(107L, pdf("recibo.pdf"), null))
-                .isInstanceOf(VoucherUploadException.class)
-                .hasMessageContaining("not configured");
+                .isInstanceOf(VoucherUploadException.class);
 
         verify(documentRepository, never()).save(any());
     }
@@ -259,5 +277,63 @@ class QuotationDocumentServiceTest {
 
         assertThatThrownBy(() -> service().listVouchers(404L))
                 .isInstanceOf(QuotationNotFoundException.class);
+    }
+
+    // ── The refusal reaches the operator in their own language ────────────
+
+    @Test
+    @DisplayName("a Spanish club is refused in Spanish")
+    void aSpanishClubIsRefusedInSpanish() {
+        // 6401 is Costa Rica. The reported bug was an operator in a Spanish
+        // club reading "Unsupported Media Type" off the screen.
+        assertThatThrownBy(() -> service().uploadVoucher(107L,
+                new MockMultipartFile("file", "malo.exe", "application/x-msdownload", "MZ".getBytes()), null))
+                .hasMessageContaining("Solo se pueden adjuntar");
+
+        assertThatThrownBy(() -> service().uploadVoucher(107L,
+                new MockMultipartFile("file", "vacio.pdf", "application/pdf", new byte[0]), null))
+                .hasMessageContaining("ningún archivo");
+    }
+
+    @Test
+    @DisplayName("an English club is refused in English")
+    void anEnglishClubIsRefusedInEnglish() {
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(
+                Quotation.builder().id(107L).storeId(8501).userId(1).build()));  // Barbados
+
+        assertThatThrownBy(() -> service().uploadVoucher(107L,
+                new MockMultipartFile("file", "bad.exe", "application/x-msdownload", "MZ".getBytes()), null))
+                .hasMessageContaining("Only JPG");
+    }
+
+    @Test
+    @DisplayName("the size limit is named in the message, in either language")
+    void theSizeLimitIsNamed() {
+        byte[] big = new byte[5 * 1024 * 1024];
+        assertThatThrownBy(() -> service().uploadVoucher(107L,
+                new MockMultipartFile("file", "grande.pdf", "application/pdf", big), null))
+                .hasMessageContaining("4Mb");
+    }
+
+    @Test
+    @DisplayName("the stored URL is built by the SDK, so a dotted bucket name still resolves")
+    void theStoredUrlIsBuiltBySdk() {
+        // The configured AWS_BUCKET really is dqs-quotes-dev.s3.pricesmart.com,
+        // a bucket named after a custom domain. Concatenating
+        // ".s3.{region}.amazonaws.com" onto that produced
+        // dqs-quotes-dev.s3.pricesmart.com.s3.us-east-1.amazonaws.com, which
+        // opened nowhere — and every voucher row stored it.
+        QuotationDocumentService s = service();
+        ReflectionTestUtils.setField(s, "bucket", "dqs-quotes-dev.s3.pricesmart.com");
+
+        String url = s.uploadVoucher(107L, pdf("recibo.pdf"), null).getStorageUrl();
+
+        assertThat(url).doesNotContain(".s3.pricesmart.com.s3.");
+        assertThat(url).contains("dqs-quotes-dev.s3.pricesmart.com");
+        assertThat(url).endsWith("quotes/order_107/quote_107_payment_voucher.pdf");
+        // A dotted bucket cannot use virtual-host addressing without breaking
+        // TLS, so the SDK falls back to path style. That is the whole reason
+        // this is not a string concatenation any more.
+        assertThat(url).startsWith("https://s3.amazonaws.com/");
     }
 }

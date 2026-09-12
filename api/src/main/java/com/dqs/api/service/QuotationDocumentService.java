@@ -11,7 +11,9 @@ import com.dqs.api.repository.QuotationDocumentRepository;
 import com.dqs.api.repository.QuotationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.dqs.api.util.ClubMarketingFooter;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -50,6 +52,8 @@ public class QuotationDocumentService {
     /** Absent when quotecenter.s3.enabled is false — see S3Config. */
     private final Optional<S3Client> s3Client;
 
+    private final MessageSource messageSource;
+
     @Value("${aws.bucket:}")
     private String bucket;
 
@@ -73,10 +77,16 @@ public class QuotationDocumentService {
         Quotation quotation = quotationRepository.findById(quotationId)
                 .orElseThrow(() -> new QuotationNotFoundException(quotationId));
 
-        S3Client client = s3Client.orElseThrow(() -> new VoucherUploadException(
-                "Attachment storage is not configured in this environment"));
+        // These messages end up on the operator's screen, so they follow the
+        // club's language — the same bundle and the same resolution the PDF's
+        // marketing footer and the quotation email use.
+        Locale locale = ClubMarketingFooter.localeFor(
+                quotation.getStoreId() == null ? 0 : quotation.getStoreId());
 
-        validate(file);
+        S3Client client = s3Client.orElseThrow(
+                () -> new VoucherUploadException(msg("voucher.error.storage-disabled", locale)));
+
+        validate(file, locale);
 
         DocumentType type = documentTypeRepository.findByCode(DocumentType.PROOF_OF_PAYMENT)
                 .orElseThrow(() -> new IllegalStateException(
@@ -104,14 +114,14 @@ public class QuotationDocumentService {
         } catch (IOException | RuntimeException e) {
             log.error("[QuotationDocumentService] upload failed quotationId={} key={}: {}",
                     quotationId, key, e.getMessage());
-            throw new VoucherUploadException("The file could not be stored", e);
+            throw new VoucherUploadException(msg("voucher.error.not-stored", locale), e);
         }
 
         QuotationDocument document = documentRepository.save(QuotationDocument.builder()
                 .quotation(quotation)
                 .documentType(type)
                 .fileName(file.getOriginalFilename())
-                .storageUrl(urlFor(key))
+                .storageUrl(urlFor(client, key))
                 .uploadedByUserId(userId)
                 .build());
 
@@ -146,13 +156,13 @@ public class QuotationDocumentService {
 
     // ── Internals ─────────────────────────────────────────────────────────────
 
-    private void validate(MultipartFile file) {
+    private void validate(MultipartFile file, Locale locale) {
         if (file == null || file.isEmpty()) {
-            throw new VoucherUploadException("No file was uploaded");
+            throw new VoucherUploadException(msg("voucher.error.no-file", locale));
         }
         if (file.getSize() > maxBytes) {
             throw new VoucherUploadException(
-                    "The file is larger than the " + (maxBytes / 1024 / 1024) + "MB limit");
+                    msg("voucher.error.too-large", locale, maxBytes / 1024 / 1024));
         }
         // Both are checked, not either: the browser sets the content type from
         // the extension anyway, and a request made by hand sets whatever it
@@ -160,8 +170,13 @@ public class QuotationDocumentService {
         String contentType = file.getContentType() == null ? ""
                 : file.getContentType().toLowerCase(Locale.ROOT);
         if (!ALLOWED_TYPES.contains(contentType) || !ALLOWED_EXTENSIONS.contains(extensionOf(file))) {
-            throw new VoucherUploadException("Only JPG, GIF, PNG and PDF files can be attached");
+            throw new VoucherUploadException(msg("voucher.error.wrong-type", locale));
         }
+    }
+
+    /** A missing key costs the sentence, not the refusal. */
+    private String msg(String key, Locale locale, Object... args) {
+        return messageSource.getMessage(key, args, key, locale);
     }
 
     private String extensionOf(MultipartFile file) {
@@ -172,12 +187,28 @@ public class QuotationDocumentService {
     }
 
     /**
-     * Legacy stores `https://{bucket}/{key}`, which is not a resolvable address
-     * — it drops the S3 host entirely, so nothing can open the link it saved.
-     * This stores the real one.
+     * Built by the SDK rather than by string concatenation.
+     *
+     * The first version here assembled `https://{bucket}.s3.{region}.amazonaws.com/{key}`
+     * on the assumption that AWS_BUCKET is a plain bucket name. It is not: the
+     * configured value is `dqs-quotes-dev.s3.pricesmart.com`, a bucket named
+     * after a custom domain, so every stored URL came out as
+     * `https://dqs-quotes-dev.s3.pricesmart.com.s3.us-east-1.amazonaws.com/...`
+     * and opened nowhere.
+     *
+     * That also corrects something said about legacy when this was written:
+     * its `https://{bucket}/{key}` was called unresolvable, and with this
+     * bucket name it resolves perfectly well. S3Utilities handles both shapes —
+     * a dotted bucket cannot use virtual-host addressing without breaking TLS,
+     * and the SDK knows to fall back to path style.
      */
-    private String urlFor(String key) {
-        return "https://" + bucket + ".s3." + region + ".amazonaws.com/" + key;
+    private String urlFor(S3Client client, String key) {
+        return client.utilities().getUrl(
+                software.amazon.awssdk.services.s3.model.GetUrlRequest.builder()
+                        .bucket(bucket)
+                        .key(key)
+                        .build())
+                .toExternalForm();
     }
 
     private static QuotationDocumentResponse toResponse(QuotationDocument document) {
