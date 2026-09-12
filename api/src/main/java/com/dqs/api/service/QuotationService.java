@@ -2,6 +2,7 @@ package com.dqs.api.service;
 
 import com.dqs.api.dto.*;
 import com.dqs.api.exception.InvalidPresetAmountException;
+import com.dqs.api.exception.InvalidSeasonException;
 import com.dqs.api.exception.QuotationAlreadySubmittedException;
 import com.dqs.api.util.MapUtils;
 import com.dqs.api.util.SpecialItems;
@@ -42,6 +43,7 @@ public class QuotationService {
     private final ItemService itemService;
     private final QuotationTotalsCalculator totalsCalculator;
     private final PresetAmountService presetAmountService;
+    private final SeasonService seasonService;
 
     @Value("${idp.base-url}")
     private String idpBaseUrl;
@@ -557,6 +559,36 @@ public class QuotationService {
                 comment == null ? 0 : comment.length());
     }
 
+    // ── Season ────────────────────────────────────────────────────────────
+
+    /**
+     * Tags the quotation with a campaign, or clears it — legacy's
+     * orders/temporadaupdate (Orders.php:639), which is a bare
+     * `UPDATE orders SET temporada_id = ?` with no validation of any kind.
+     *
+     * Here the season has to be active and assigned to the quotation's own
+     * club. The screen filters the list already, so this only catches a stale
+     * page or a request made by hand — but without it the column would accept
+     * any integer, including a finished campaign or another country's.
+     *
+     * A null clears the tag. Legacy's select posts 0 for its placeholder and
+     * stores that; we keep one spelling of nothing.
+     */
+    @Transactional
+    public QuotationResponse updateSeason(Long id, Integer seasonId) {
+        Quotation quotation = findOrThrow(id);
+
+        if (seasonId != null && seasonId != 0
+                && !seasonService.isAvailableForClub(seasonId, quotation.getStoreId())) {
+            throw new InvalidSeasonException(
+                    "Season " + seasonId + " is not available for club " + quotation.getStoreId());
+        }
+
+        quotation.setSeasonId(seasonId == null || seasonId == 0 ? null : seasonId);
+        log.info("[QuotationService] updateSeason id={} seasonId={}", id, quotation.getSeasonId());
+        return toResponse(quotationRepository.save(quotation));
+    }
+
     // ── Extend the expiry ─────────────────────────────────────────────────
 
     /**
@@ -722,7 +754,8 @@ public class QuotationService {
                 .statusId(q.getStatusId())
                 .dateTime(q.getDateTime())
                 .expiryDate(q.getExpiryDate())
-                .comments(q.getComments());
+                .comments(q.getComments())
+                .seasonId(q.getSeasonId());
 
         if (c != null) {
             b.customerName(c.getCustomerName())

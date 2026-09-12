@@ -19,6 +19,8 @@ public class QuotationResponse {
     private LocalDateTime dateTime;
     private LocalDate expiryDate;
     private String comments;
+    /** ps_temporada.tid, or null for no season. */
+    private Integer seasonId;
 
     // customer
     private String customerName;

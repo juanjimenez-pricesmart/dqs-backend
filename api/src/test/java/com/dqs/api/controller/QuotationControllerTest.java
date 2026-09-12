@@ -62,6 +62,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class QuotationControllerTest {
 
     @Mock private QuotationService quotationService;
+    @Mock private com.dqs.api.service.SeasonService seasonService;
     @Mock private QuotationListRepository quotationListRepository;
     @Mock private BankTransferNoticeService bankTransferNoticeService;
 
@@ -72,7 +73,7 @@ class QuotationControllerTest {
     void setUp() {
         mvc = MockMvcBuilders
                 .standaloneSetup(new QuotationController(
-                        quotationService, quotationListRepository, bankTransferNoticeService))
+                        quotationService, seasonService, quotationListRepository, bankTransferNoticeService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -321,6 +322,55 @@ class QuotationControllerTest {
         // to the screen as an outage and it would retry.
         mvc.perform(patch("/api/v1/quotations/107/items/700")
                         .contentType(MediaType.APPLICATION_JSON).content("{\"presetAmount\":1}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").exists());
+    }
+
+    @Test
+    @DisplayName("the seasons list is scoped to the club that asks")
+    void seasonsAreScopedToTheClub() throws Exception {
+        when(seasonService.getActiveForClub(6101)).thenReturn(List.of(
+                java.util.Map.of("tid", 12, "titulo", "Gift Program FY25")));
+
+        mvc.perform(get("/api/v1/quotations/seasons").param("clubId", "6101"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].titulo").value("Gift Program FY25"));
+    }
+
+    @Test
+    @DisplayName("a club with no seasons gets an empty list, not a 404")
+    void aClubWithNoSeasonsGetsAnEmptyList() throws Exception {
+        when(seasonService.getActiveForClub(6301)).thenReturn(List.of());
+
+        // The select renders with only its placeholder; an error would make the
+        // screen think something broke.
+        mvc.perform(get("/api/v1/quotations/seasons").param("clubId", "6301"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    @DisplayName("clearing the season sends null rather than a magic zero")
+    void clearingTheSeasonSendsNull() throws Exception {
+        when(quotationService.updateSeason(eq(107L), any()))
+                .thenReturn(QuotationResponse.builder().id(107L).build());
+
+        mvc.perform(patch("/api/v1/quotations/107/season")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"seasonId\":null}"))
+                .andExpect(status().isOk());
+
+        verify(quotationService).updateSeason(107L, null);
+    }
+
+    @Test
+    @DisplayName("a season the club may not use answers 400")
+    void anUnavailableSeasonIsABadRequest() throws Exception {
+        when(quotationService.updateSeason(eq(107L), any()))
+                .thenThrow(new com.dqs.api.exception.InvalidSeasonException(
+                        "Season 12 is not available for club 6301"));
+
+        mvc.perform(patch("/api/v1/quotations/107/season")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"seasonId\":12}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").exists());
     }

@@ -81,6 +81,7 @@ class QuotationServiceTest {
     @Mock private ItemService itemService;
     @Mock private QuotationTotalsCalculator totalsCalculator;
     @Mock private PresetAmountService presetAmountService;
+    @Mock private SeasonService seasonService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -102,7 +103,7 @@ class QuotationServiceTest {
     private QuotationService service(String idpBaseUrl) {
         QuotationService s = new QuotationService(quotationRepository, quotationItemRepository,
                 quotationCancelRepository, omsService, omsPayloadBuilder, objectMapper,
-                itemService, totalsCalculator, presetAmountService);
+                itemService, totalsCalculator, presetAmountService, seasonService);
         set(s, "idpBaseUrl", idpBaseUrl);
         set(s, "clientId", "quotecenter");
         set(s, "clientSecret", "s3cr3t");
@@ -1738,5 +1739,59 @@ class QuotationServiceTest {
 
         assertThat(card.getRate()).isEqualByComparingTo("10000.00");
         verify(presetAmountService, never()).getForProductAndClub(any(), any());
+    }
+
+    // ── Temporadas ────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("tagging a quotation with one of its club's seasons stores it")
+    void taggingWithAnAvailableSeasonStoresIt() {
+        Quotation q = quotation(1);
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(q));
+        when(quotationRepository.save(any(Quotation.class))).thenAnswer(i -> i.getArgument(0));
+        when(seasonService.isAvailableForClub(12, 3)).thenReturn(true);
+
+        assertThat(service().updateSeason(107L, 12).getSeasonId()).isEqualTo(12);
+        assertThat(q.getSeasonId()).isEqualTo(12);
+    }
+
+    @Test
+    @DisplayName("a season the club does not have is refused")
+    void aSeasonFromAnotherClubIsRefused() {
+        Quotation q = quotation(1);
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(q));
+        when(seasonService.isAvailableForClub(12, 3)).thenReturn(false);
+
+        // Legacy's temporadaupdate is a bare UPDATE with no validation, so any
+        // integer lands in the column — a finished campaign, another country's.
+        assertThatThrownBy(() -> service().updateSeason(107L, 12))
+                .isInstanceOf(com.dqs.api.exception.InvalidSeasonException.class);
+        assertThat(q.getSeasonId()).isNull();
+        verify(quotationRepository, never()).save(any(Quotation.class));
+    }
+
+    @Test
+    @DisplayName("null and zero both clear the tag, and neither is validated")
+    void nullAndZeroBothClearIt() {
+        Quotation q = quotation(1);
+        q.setSeasonId(12);
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(q));
+        when(quotationRepository.save(any(Quotation.class))).thenAnswer(i -> i.getArgument(0));
+
+        // Legacy's placeholder option posts 0 and the column keeps it, so its
+        // data spells "no season" both ways. One spelling here.
+        assertThat(service().updateSeason(107L, 0).getSeasonId()).isNull();
+        q.setSeasonId(12);
+        assertThat(service().updateSeason(107L, null).getSeasonId()).isNull();
+        verify(seasonService, never()).isAvailableForClub(any(), any());
+    }
+
+    @Test
+    @DisplayName("tagging a quotation that does not exist is a 404")
+    void taggingAMissingQuotationThrows() {
+        when(quotationRepository.findById(404L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service().updateSeason(404L, 12))
+                .isInstanceOf(QuotationNotFoundException.class);
     }
 }
