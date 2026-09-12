@@ -85,7 +85,7 @@ class MemberServiceTest {
     }
 
     @Test
-    @DisplayName("a usable term is wrapped in wildcards")
+    @DisplayName("a single-word term is wrapped in wildcards")
     void searchesWithWildcards() {
         when(nativeQueries.list(anyString(), anyString()))
             .thenReturn(List.of(Map.of("nombre", "WILLIAM EL KARAAN")));
@@ -99,6 +99,31 @@ class MemberServiceTest {
     }
 
     @Test
+    @DisplayName("spaces between words become wildcards — mirrors legacy str_replace(' ','%',$id)")
+    void multiWordTermJoinsWordsWithWildcards() {
+        when(nativeQueries.list(anyString(), anyString())).thenReturn(List.of());
+
+        service().searchMembers("Juan Carlos");
+
+        ArgumentCaptor<String> arg = ArgumentCaptor.forClass(String.class);
+        verify(nativeQueries).list(anyString(), arg.capture());
+        // "Juan Carlos" → %Juan%Carlos% so "Juan de los Santos Carlos" matches
+        assertThat(arg.getValue()).isEqualTo("%Juan%Carlos%");
+    }
+
+    @Test
+    @DisplayName("extra spaces between words are treated as a single separator")
+    void extraSpacesCollapsed() {
+        when(nativeQueries.list(anyString(), anyString())).thenReturn(List.of());
+
+        service().searchMembers("Maria  Jose");
+
+        ArgumentCaptor<String> arg = ArgumentCaptor.forClass(String.class);
+        verify(nativeQueries).list(anyString(), arg.capture());
+        assertThat(arg.getValue()).isEqualTo("%Maria%Jose%");
+    }
+
+    @Test
     @DisplayName("a percent sign in the term is escaped, not treated as a wildcard")
     void percentInTermIsEscaped() {
         when(nativeQueries.list(anyString(), anyString())).thenReturn(List.of());
@@ -109,5 +134,17 @@ class MemberServiceTest {
         verify(nativeQueries).list(anyString(), arg.capture());
         // Left unescaped it would match every member whose name starts with "50"
         assertThat(arg.getValue()).isEqualTo("%50\\%off%");
+    }
+
+    @Test
+    @DisplayName("an underscore in the term is escaped so it does not act as a single-char wildcard")
+    void underscoreInTermIsEscaped() {
+        when(nativeQueries.list(anyString(), anyString())).thenReturn(List.of());
+
+        service().searchMembers("O_Brien");
+
+        ArgumentCaptor<String> arg = ArgumentCaptor.forClass(String.class);
+        verify(nativeQueries).list(anyString(), arg.capture());
+        assertThat(arg.getValue()).isEqualTo("%O\\_Brien%");
     }
 }
