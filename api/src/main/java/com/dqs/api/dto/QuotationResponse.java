@@ -21,6 +21,8 @@ public class QuotationResponse {
     private String comments;
     /** ps_temporada.tid, or null for no season. */
     private Integer seasonId;
+    /** Callejas purchase order, or null when the quote is not an import. */
+    private Long odc;
 
     // customer
     private String customerName;

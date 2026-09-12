@@ -62,6 +62,18 @@ public class Quotation {
     @Column(name = "season_id")
     private Integer seasonId;
 
+    /**
+     * The Callejas purchase order this quotation was imported from — legacy's
+     * orders.odc. NULL for every quotation this application creates today; the
+     * importer that would write it is not built yet.
+     *
+     * It is not just provenance: a quotation carrying one prints its lines
+     * grouped by product-code prefix regardless of the sort radio. See
+     * {@link com.dqs.api.util.QuoteItemSort#order}.
+     */
+    @Column(name = "odc")
+    private Long odc;
+
     @OneToOne(mappedBy = "quotation", cascade = CascadeType.ALL, orphanRemoval = true)
     private QuotationCustomer customer;
 

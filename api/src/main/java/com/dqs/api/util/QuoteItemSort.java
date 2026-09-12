@@ -24,12 +24,10 @@ import java.util.function.Function;
  * case, which is what MySQL does for an ASC ORDER BY under the default
  * case-insensitive collation.
  *
- * Not carried over: legacy's El Salvador branch, where a club in 6701-6798
- * whose order has a non-zero {@code orders.odc} is forced to
- * {@code substring(product_id,1,2)} and the radio is ignored entirely. Our
- * quotation carries no odc — the Callejas import that writes it does not exist
- * on our side yet — so there is nothing to branch on. It has to come back with
- * that import, not before.
+ * Legacy's El Salvador branch is carried over too, in {@link #order}: a club in
+ * 6701-6798 whose quotation has a Callejas purchase order on it is forced to
+ * {@code substring(product_id,1,2)} and the radio is ignored entirely. That
+ * branch had to wait for {@code quotations.odc} to exist; it does now.
  */
 public enum QuoteItemSort {
 
@@ -37,6 +35,24 @@ public enum QuoteItemSort {
     CATEGORY   (2, QuotationItemResponse::getCategory),
     PRODUCT_ID (3, QuotationItemResponse::getProductId),
     DESCRIPTION(4, QuotationItemResponse::getDescription);
+
+    /**
+     * Legacy's Callejas clubs: {@code 6700 < store_id && store_id < 6799},
+     * exclusive at both ends, so 6701-6798. Only 6701-6704 exist today and all
+     * 884 orders carrying an odc belong to them, but the bounds are legacy's
+     * and a fifth club would fall inside them without anyone touching this.
+     */
+    private static final int CALLEJAS_MIN = 6701;
+    private static final int CALLEJAS_MAX = 6798;
+
+    /**
+     * MySQL's {@code ORDER BY substring(product_id,1,2)} — the first two
+     * characters, or the whole code when it is shorter, which is what
+     * SUBSTRING does rather than failing.
+     */
+    private static final Comparator<QuotationItemResponse> BY_PRODUCT_PREFIX =
+        Comparator.comparing(QuoteItemSort::productPrefix,
+                Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER));
 
     private final int code;
     private final Function<QuotationItemResponse, String> key;
@@ -65,6 +81,40 @@ public enum QuoteItemSort {
 
     public int code() {
         return code;
+    }
+
+    /**
+     * The lines in the order this quotation should print them, radio included —
+     * or not, when the quotation came from a Callejas purchase order.
+     *
+     * A Callejas import is grouped by the first two characters of the product
+     * code, and the operator's choice is ignored: that grouping is how the
+     * picking sheet is walked, so honouring the radio would hand the warehouse
+     * a document in an order the shelves are not in.
+     *
+     * @param odc the Callejas purchase order, or null when the quotation is an
+     *            ordinary one. Legacy writes 0 for the same thing and tests
+     *            {@code $ver == 0}, which in PHP is true for NULL as well, so
+     *            both of its spellings already take the ordinary path there.
+     */
+    public static List<QuotationItemResponse> order(
+            List<QuotationItemResponse> items, Integer sortBy, int storeId, Long odc) {
+
+        if (isCallejasOrder(storeId, odc)) {
+            return items.stream().sorted(BY_PRODUCT_PREFIX).toList();
+        }
+        return fromCode(sortBy).sort(items);
+    }
+
+    /** Whether the radio is overridden — a Callejas club with a purchase order on the quotation. */
+    public static boolean isCallejasOrder(int storeId, Long odc) {
+        return storeId >= CALLEJAS_MIN && storeId <= CALLEJAS_MAX && odc != null && odc != 0L;
+    }
+
+    private static String productPrefix(QuotationItemResponse item) {
+        String productId = item.getProductId();
+        if (productId == null) return null;
+        return productId.length() <= 2 ? productId : productId.substring(0, 2);
     }
 
     public List<QuotationItemResponse> sort(List<QuotationItemResponse> items) {

@@ -48,8 +48,7 @@ public class QuotePdfService {
      *               null for the default. See {@link QuoteItemSort}.
      */
     public byte[] generate(Long quotationId, Integer sortBy) throws Exception {
-        QuoteItemSort sort = QuoteItemSort.fromCode(sortBy);
-        log.info("[QuotePdfService] generate quotationId={} sortBy={} ({})", quotationId, sortBy, sort);
+        log.info("[QuotePdfService] generate quotationId={} sortBy={}", quotationId, sortBy);
 
         // 1. Collect data
         QuotationResponse quote = quotationService.getById(quotationId);
@@ -62,13 +61,21 @@ public class QuotePdfService {
         String country  = str(store, "pais_iso2");
         boolean hasFel  = isFelCountry(country);
 
-        // 2. Filter the delivery item out, then order what is left the way the
-        //    operator asked. The sort comes after the filter for the same
-        //    reason legacy's does not need to: the delivery SKU is not a line
-        //    on our table, so where it would have sorted to is irrelevant.
-        List<QuotationItemResponse> items = sort.sort(allItems.stream()
-            .filter(i -> com.dqs.api.util.SpecialItems.isRegularLine(i.getProductId()))
-            .toList());
+        // 2. Filter the delivery item out, then order what is left. The sort
+        //    comes after the filter for the same reason legacy's does not need
+        //    to: the delivery SKU is not a line on our table, so where it would
+        //    have sorted to is irrelevant.
+        //
+        //    QuoteItemSort.order, not the radio alone: a quotation imported from
+        //    a Callejas purchase order is grouped by product-code prefix and the
+        //    radio is ignored, exactly as legacy's query does.
+        List<QuotationItemResponse> items = QuoteItemSort.order(
+            allItems.stream()
+                .filter(i -> com.dqs.api.util.SpecialItems.isRegularLine(i.getProductId()))
+                .toList(),
+            sortBy,
+            quote.getStoreId() != null ? quote.getStoreId() : 0,
+            quote.getOdc());
 
         // 3. Totals
         int storeId = quote.getStoreId() != null ? quote.getStoreId() : 0;

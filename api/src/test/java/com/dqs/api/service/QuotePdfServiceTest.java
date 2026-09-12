@@ -598,4 +598,99 @@ class QuotePdfServiceTest {
         return MESSAGES.getMessage("quote.footer.marketing.part2", null,
             ClubMarketingFooter.localeFor(storeId));
     }
+
+    // ── Callejas: the radio is overridden ─────────────────────────────────
+
+    /** Codes whose first two characters group them differently from the whole. */
+    private List<QuotationItemResponse> callejasLines() {
+        return List.of(
+            QuotationItemResponse.builder().id(1L).productId("9101").description("C")
+                .department("10").category("10").qty(BigDecimal.ONE)
+                .rate(BigDecimal.TEN).amount(BigDecimal.TEN).build(),
+            QuotationItemResponse.builder().id(2L).productId("1055").description("A")
+                .department("20").category("20").qty(BigDecimal.ONE)
+                .rate(BigDecimal.TEN).amount(BigDecimal.TEN).build(),
+            QuotationItemResponse.builder().id(3L).productId("9102").description("B")
+                .department("30").category("30").qty(BigDecimal.ONE)
+                .rate(BigDecimal.TEN).amount(BigDecimal.TEN).build());
+    }
+
+    private List<String> codesFor(int storeId, Integer sortBy, Long odc) {
+        return QuoteItemSort.order(callejasLines(), sortBy, storeId, odc).stream()
+            .map(QuotationItemResponse::getProductId)
+            .toList();
+    }
+
+    @Test
+    @DisplayName("a Callejas import groups by the product code's first two characters")
+    void aCallejasImportGroupsByPrefix() {
+        // 10 before 91, and the two 91s keep the order they came in.
+        assertThat(codesFor(6701, 4, 24110230004769L)).containsExactly("1055", "9101", "9102");
+    }
+
+    @Test
+    @DisplayName("the radio is ignored for a Callejas import, whichever one is chosen")
+    void theRadioIsIgnoredForACallejasImport() {
+        // Sorting by description would give A, B, C — that is 1055, 9102, 9101.
+        // The picking sheet is walked by prefix, so the shelves win.
+        for (Integer sortBy : new Integer[] { null, 1, 2, 3, 4 }) {
+            assertThat(codesFor(6701, sortBy, 24110230004769L))
+                .containsExactly("1055", "9101", "9102");
+        }
+    }
+
+    @Test
+    @DisplayName("the same club with no purchase order obeys the radio again")
+    void withoutAPurchaseOrderTheRadioIsBackInCharge() {
+        // Legacy writes 0 for "no odc" and tests `$ver == 0`, which in PHP is
+        // true for NULL too — so both of its spellings take this path.
+        assertThat(codesFor(6701, 4, null)).containsExactly("1055", "9102", "9101");
+        assertThat(codesFor(6701, 4, 0L)).containsExactly("1055", "9102", "9101");
+    }
+
+    @Test
+    @DisplayName("a club outside the Callejas range obeys the radio even carrying an odc")
+    void anotherClubIsUnaffected() {
+        assertThat(codesFor(6401, 4, 24110230004769L)).containsExactly("1055", "9102", "9101");
+    }
+
+    @Test
+    @DisplayName("the Callejas range is exclusive at both ends, as legacy writes it")
+    void theRangeBoundsAreLegacys() {
+        // `6700 < store_id && store_id < 6799`.
+        assertThat(QuoteItemSort.isCallejasOrder(6700, 1L)).isFalse();
+        assertThat(QuoteItemSort.isCallejasOrder(6701, 1L)).isTrue();
+        assertThat(QuoteItemSort.isCallejasOrder(6798, 1L)).isTrue();
+        assertThat(QuoteItemSort.isCallejasOrder(6799, 1L)).isFalse();
+    }
+
+    @Test
+    @DisplayName("a code shorter than two characters is taken whole, as SUBSTRING does")
+    void ashortCodeIsTakenWhole() {
+        List<QuotationItemResponse> lines = List.of(
+            QuotationItemResponse.builder().id(1L).productId("9").build(),
+            QuotationItemResponse.builder().id(2L).productId("10").build());
+
+        // MySQL's SUBSTRING('9',1,2) is '9', not an error.
+        assertThat(QuoteItemSort.order(lines, 3, 6701, 1L).stream()
+            .map(QuotationItemResponse::getProductId).toList())
+            .containsExactly("10", "9");
+    }
+
+    @Test
+    @DisplayName("a Callejas quotation still renders")
+    void aCallejasQuotationStillRenders() throws Exception {
+        when(quotationService.getById(107L)).thenReturn(QuotationResponse.builder()
+            .id(107L).storeId(6701).userId(1).statusId(3)
+            .dateTime(LocalDateTime.of(2026, 9, 10, 15, 30))
+            .expiryDate(LocalDate.of(2026, 10, 1))
+            .customerName("CALLEJAS").odc(24110230004769L).build());
+        when(quotationService.getItems(107L)).thenReturn(callejasLines());
+        when(nativeQueries.list(contains("FROM ps_tienda"), any()))
+            .thenReturn(List.of(storeRow("SV", "USD")));
+        when(fiscalService.getFiscalDataByQuotation(107L)).thenReturn(null);
+        when(deliveryService.getDelivery(107L)).thenReturn(null);
+
+        assertIsPdf(generate());
+    }
 }
