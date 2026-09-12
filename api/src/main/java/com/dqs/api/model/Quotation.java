@@ -51,6 +51,17 @@ public class Quotation {
     @Column(name = "cancel_reason_id")
     private Integer cancelReasonId;
 
+    /**
+     * The campaign this quotation belongs to — legacy's orders.temporada_id, a
+     * ps_temporada.tid. Held as a plain id rather than an association: that
+     * catalog belongs to the application we are replacing and is read through
+     * NativeQueries, so there is no entity to point at.
+     *
+     * NULL means no season. Legacy spells the same thing both 0 and NULL.
+     */
+    @Column(name = "season_id")
+    private Integer seasonId;
+
     @OneToOne(mappedBy = "quotation", cascade = CascadeType.ALL, orphanRemoval = true)
     private QuotationCustomer customer;
 

@@ -22,6 +22,7 @@ import java.util.List;
 public class QuotationController {
 
     private final QuotationService quotationService;
+    private final com.dqs.api.service.SeasonService seasonService;
     private final com.dqs.api.repository.QuotationListRepository quotationListRepository;
     private final com.dqs.api.service.BankTransferNoticeService bankTransferNoticeService;
 
@@ -154,6 +155,32 @@ public class QuotationController {
                 comment == null ? 0 : comment.length());
         quotationService.updateComment(id, comment);
         return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Temporadas disponibles",
+               description = "Las temporadas activas asignadas al club — ps_temporada con status 2, cruzada con " +
+                             "ps_temporada_tienda. Lista vacía si el club no tiene ninguna asignada, que es una " +
+                             "respuesta válida: el select queda con solo su placeholder. El legacy no filtra por " +
+                             "club y ofrece toda temporada activa a todos.")
+    @GetMapping("/seasons")
+    public ResponseEntity<List<java.util.Map<String, Object>>> seasons(
+            @Parameter(description = "ID del club/tienda") @RequestParam Integer clubId) {
+        log.info("[QuotationController] GET /api/v1/quotations/seasons clubId={}", clubId);
+        return ResponseEntity.ok(seasonService.getActiveForClub(clubId));
+    }
+
+    @Operation(summary = "Asignar temporada",
+               description = "Etiqueta la cotización con una temporada, o la quita enviando null. Equivale a " +
+                             "orders/temporadaupdate del legacy, que no valida nada; acá la temporada tiene que " +
+                             "estar activa y asignada al club de la cotización, o responde 400.")
+    @PatchMapping("/{id}/season")
+    public ResponseEntity<QuotationResponse> updateSeason(
+            @Parameter(description = "ID de la cotización") @PathVariable Long id,
+            @RequestBody java.util.Map<String, Object> body) {
+        Object raw = body.get("seasonId");
+        Integer seasonId = raw == null ? null : Integer.valueOf(raw.toString());
+        log.info("[QuotationController] PATCH /api/v1/quotations/{}/season seasonId={}", id, seasonId);
+        return ResponseEntity.ok(quotationService.updateSeason(id, seasonId));
     }
 
     @Operation(summary = "Extender fecha de expiración",
