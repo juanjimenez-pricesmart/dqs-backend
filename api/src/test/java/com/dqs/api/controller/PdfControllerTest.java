@@ -1,6 +1,7 @@
 package com.dqs.api.controller;
 
 import com.dqs.api.exception.GlobalExceptionHandler;
+import com.dqs.api.service.CallejasReportService;
 import com.dqs.api.service.QuotePdfService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -29,12 +30,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class PdfControllerTest {
 
     @Mock private QuotePdfService quotePdfService;
+    @Mock private CallejasReportService callejasReportService;
 
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
-        mvc = MockMvcBuilders.standaloneSetup(new PdfController(quotePdfService))
+        mvc = MockMvcBuilders.standaloneSetup(new PdfController(quotePdfService, callejasReportService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -61,6 +63,29 @@ class PdfControllerTest {
         mvc.perform(get("/api/v1/quotations/107/pdf"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(content().string(""));
+    }
+
+    @Test
+    @DisplayName("a quotation with no purchase order has no Callejas sheet — 404, not 500")
+    void noPurchaseOrderIsNotFound() throws Exception {
+        when(callejasReportService.generate(anyLong()))
+                .thenThrow(new com.dqs.api.exception.QuotationNotFoundException(107L));
+
+        // The button is only offered for a Callejas import, so this is a stale
+        // page rather than an outage; a 500 would read as one and be retried.
+        mvc.perform(get("/api/v1/quotations/107/callejas-report"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("the picking sheet downloads as its own attachment")
+    void callejasReportDownloads() throws Exception {
+        when(callejasReportService.generate(107L)).thenReturn(new byte[] { '%', 'P', 'D', 'F' });
+
+        mvc.perform(get("/api/v1/quotations/107/callejas-report"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Disposition", "attachment; filename=\"callejas-107.pdf\""))
+                .andExpect(content().contentType("application/pdf"));
     }
 
     @Test
