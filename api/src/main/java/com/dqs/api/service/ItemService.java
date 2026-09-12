@@ -118,7 +118,7 @@ public class ItemService {
     @SuppressWarnings("unchecked")
     public Object searchItems(Integer clubId, String description) {
         log.info("[ItemService] searchItems clubId={} description={}", clubId, description);
-        String encoded = description.replace(" ", "%20");
+        String encoded = description.trim().replace(" ", "%20");
         String response = businessApiClient.get("/api/getSearch/club/" + clubId + "/description/" + encoded);
         try {
             // The business API may return an array or an object
