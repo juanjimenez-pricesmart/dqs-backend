@@ -521,6 +521,54 @@ public class QuotationService {
         totalsCalculator.recalculateFor(quotationId);
     }
 
+    /**
+     * Removes several lines at once — legacy's itemsdel(), which collects the
+     * checked rows and posts them to orders/deleteitems in a single call
+     * (edit.php:2198).
+     *
+     * One transaction and one recalculation, not one of each per line: totals
+     * recomputed forty times to delete forty rows is forty chances to leave a
+     * quotation with figures that match no set of lines.
+     *
+     * A panel-owned line is refused rather than quietly dropped. The delivery
+     * SKU has a quotation_delivery row behind it, and removing the line without
+     * the row leaves a record no screen can then edit — which is why
+     * DeliveryService owns that path. It cannot arrive here from our own screen
+     * (the lines table filters it out) but the endpoint is reachable regardless.
+     *
+     * Ids that do not exist are ignored. Bulk deleting what somebody else
+     * already deleted is not an error worth failing the whole call over; the
+     * answer says how many rows actually went.
+     */
+    @Transactional
+    public Map<String, Object> deleteItems(Long quotationId, List<Long> itemIds) {
+        findOrThrow(quotationId);
+        if (itemIds == null || itemIds.isEmpty()) {
+            return Map.of("deleted", 0);
+        }
+
+        List<QuotationItem> items = quotationItemRepository.findAllById(itemIds).stream()
+                .filter(i -> i.getQuotation() != null && quotationId.equals(i.getQuotation().getId()))
+                .toList();
+
+        List<String> panelOwned = items.stream()
+                .map(QuotationItem::getProductId)
+                .filter(code -> SpecialItems.has(code, SpecialItems.Trait.OWNED_BY_PANEL))
+                .toList();
+        if (!panelOwned.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Lines owned by their own panel cannot be bulk deleted: " + panelOwned);
+        }
+
+        quotationItemRepository.deleteAll(items);
+        log.info("[QuotationService] bulk delete quotation_id={} asked={} deleted={}",
+                quotationId, itemIds.size(), items.size());
+
+        // Once, after every line is gone.
+        totalsCalculator.recalculateFor(quotationId);
+        return Map.of("deleted", items.size());
+    }
+
     // ── Cancel quotation (pending only) ───────────────────────────────────
 
     public List<Map<String, Object>> getCancelReasons() {

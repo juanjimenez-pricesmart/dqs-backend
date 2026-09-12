@@ -54,6 +54,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -1793,5 +1794,80 @@ class QuotationServiceTest {
 
         assertThatThrownBy(() -> service().updateSeason(404L, 12))
                 .isInstanceOf(QuotationNotFoundException.class);
+    }
+
+    // ── Bulk delete ───────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("several lines go in one call, with the totals recomputed once")
+    void severalLinesGoInOneCall() {
+        Quotation q = quotation(1);
+        List<QuotationItem> items = List.of(item(q, 1L, "1001"), item(q, 2L, "1002"), item(q, 3L, "1003"));
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(q));
+        when(quotationItemRepository.findAllById(any())).thenReturn(items);
+
+        assertThat(service().deleteItems(107L, List.of(1L, 2L, 3L)))
+                .containsEntry("deleted", 3);
+
+        verify(quotationItemRepository).deleteAll(items);
+        // Once, not once per line: recomputing after each of forty deletions is
+        // forty chances to leave figures matching no set of lines.
+        verify(totalsCalculator, times(1)).recalculateFor(107L);
+    }
+
+    @Test
+    @DisplayName("a line from another quotation is not deleted by asking nicely")
+    void anotherQuotationsLineIsNotDeleted() {
+        Quotation mine = quotation(1);
+        Quotation theirs = Quotation.builder().id(999L).storeId(3).userId(1).statusId(1).build();
+        QuotationItem foreign = item(theirs, 5L, "1001");
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(mine));
+        when(quotationItemRepository.findAllById(any()))
+                .thenReturn(List.of(item(mine, 1L, "1001"), foreign));
+
+        assertThat(service().deleteItems(107L, List.of(1L, 5L))).containsEntry("deleted", 1);
+
+        ArgumentCaptor<List<QuotationItem>> deleted = ArgumentCaptor.forClass(List.class);
+        verify(quotationItemRepository).deleteAll(deleted.capture());
+        assertThat(deleted.getValue()).doesNotContain(foreign);
+    }
+
+    @Test
+    @DisplayName("the delivery line is refused — its panel owns it and its record")
+    void thePanelOwnedLineIsRefused() {
+        Quotation q = quotation(1);
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(q));
+        when(quotationItemRepository.findAllById(any()))
+                .thenReturn(List.of(item(q, 1L, "1001"), item(q, 2L, "888905")));
+
+        // Removing it without its quotation_delivery row leaves a record no
+        // screen can edit. DeliveryService owns that path; our own table filters
+        // the line out, but the endpoint is reachable regardless.
+        assertThatThrownBy(() -> service().deleteItems(107L, List.of(1L, 2L)))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(quotationItemRepository, never()).deleteAll(any());
+        verify(totalsCalculator, never()).recalculateFor(any());
+    }
+
+    @Test
+    @DisplayName("ids that no longer exist are ignored rather than failing the call")
+    void vanishedIdsAreIgnored() {
+        Quotation q = quotation(1);
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(q));
+        when(quotationItemRepository.findAllById(any())).thenReturn(List.of(item(q, 1L, "1001")));
+
+        // Two operators tidying the same quotation should not fail each other.
+        assertThat(service().deleteItems(107L, List.of(1L, 404L))).containsEntry("deleted", 1);
+    }
+
+    @Test
+    @DisplayName("an empty selection touches nothing")
+    void anEmptySelectionTouchesNothing() {
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(quotation(1)));
+
+        assertThat(service().deleteItems(107L, List.of())).containsEntry("deleted", 0);
+        assertThat(service().deleteItems(107L, null)).containsEntry("deleted", 0);
+        verify(quotationItemRepository, never()).deleteAll(any());
+        verify(totalsCalculator, never()).recalculateFor(any());
     }
 }
