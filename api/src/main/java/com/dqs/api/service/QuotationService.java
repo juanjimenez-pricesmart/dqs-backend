@@ -755,7 +755,8 @@ public class QuotationService {
                 .dateTime(q.getDateTime())
                 .expiryDate(q.getExpiryDate())
                 .comments(q.getComments())
-                .seasonId(q.getSeasonId());
+                .seasonId(q.getSeasonId())
+                .odc(q.getOdc());
 
         if (c != null) {
             b.customerName(c.getCustomerName())
