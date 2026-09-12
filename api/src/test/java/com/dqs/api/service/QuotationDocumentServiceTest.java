@@ -9,6 +9,7 @@ import com.dqs.api.model.QuotationDocument;
 import com.dqs.api.repository.DocumentTypeRepository;
 import com.dqs.api.repository.QuotationDocumentRepository;
 import com.dqs.api.repository.QuotationRepository;
+import com.dqs.api.repository.support.NativeQueries;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -56,6 +59,7 @@ class QuotationDocumentServiceTest {
     @Mock private QuotationDocumentRepository documentRepository;
     @Mock private DocumentTypeRepository documentTypeRepository;
     @Mock private S3Client s3Client;
+    @Mock private NativeQueries nativeQueries;
 
     private static final DocumentType PROOF = DocumentType.builder()
             .id(4).code(DocumentType.PROOF_OF_PAYMENT).name("Proof of payment").build();
@@ -73,7 +77,8 @@ class QuotationDocumentServiceTest {
 
     private QuotationDocumentService service(Optional<S3Client> client) {
         QuotationDocumentService s = new QuotationDocumentService(
-                quotationRepository, documentRepository, documentTypeRepository, client, MESSAGES);
+                quotationRepository, documentRepository, documentTypeRepository, nativeQueries,
+                client, MESSAGES);
         ReflectionTestUtils.setField(s, "bucket", "dqs-quotes-dev");
         ReflectionTestUtils.setField(s, "region", "us-east-1");
         ReflectionTestUtils.setField(s, "maxBytes", 4L * 1024 * 1024);
@@ -90,6 +95,12 @@ class QuotationDocumentServiceTest {
 
     @BeforeEach
     void wire() {
+        // 5836 is a real user in dev; the screen's auth placeholder is 1, which
+        // is not — see uploaderFor.
+        when(nativeQueries.scalar(contains("FROM users"), eq(Long.class), eq(5836)))
+                .thenReturn(Optional.of(1L));
+        when(nativeQueries.scalar(contains("FROM users"), eq(Long.class), eq(1)))
+                .thenReturn(Optional.of(0L));
         // A real S3Utilities, not a mock: the point of the change under test is
         // that the SDK knows how to address a bucket whose name contains dots,
         // and a stubbed URL would assert nothing about that.
@@ -364,5 +375,26 @@ class QuotationDocumentServiceTest {
         // TLS, so the SDK falls back to path style. That is the whole reason
         // this is not a string concatenation any more.
         assertThat(url).startsWith("https://s3.amazonaws.com/");
+    }
+
+    @Test
+    @DisplayName("an unknown uploader is recorded as nobody, not as a failed upload")
+    void anUnknownUploaderIsRecordedAsNobody() {
+        // quotation_documents is the first table of ours with a real foreign
+        // key to users, and the screen sends CreateQuotePage's auth placeholder
+        // — `const USER_ID = 1`, and there is no user 1. Every upload from the
+        // screen failed the constraint and answered 500, which the operator saw
+        // as a bare "no se pudo adjuntar".
+        QuotationDocumentResponse response = service().uploadVoucher(107L, pdf("recibo.pdf"), 1);
+
+        assertThat(response.getUploadedByUserId()).isNull();
+        assertThat(response.getFileName()).isEqualTo("recibo.pdf");
+    }
+
+    @Test
+    @DisplayName("a real uploader is kept")
+    void aRealUploaderIsKept() {
+        assertThat(service().uploadVoucher(107L, pdf("recibo.pdf"), 5836).getUploadedByUserId())
+                .isEqualTo(5836);
     }
 }

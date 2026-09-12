@@ -9,6 +9,7 @@ import com.dqs.api.model.QuotationDocument;
 import com.dqs.api.repository.DocumentTypeRepository;
 import com.dqs.api.repository.QuotationDocumentRepository;
 import com.dqs.api.repository.QuotationRepository;
+import com.dqs.api.repository.support.NativeQueries;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import com.dqs.api.util.ClubMarketingFooter;
@@ -66,6 +67,7 @@ public class QuotationDocumentService {
     private final QuotationRepository quotationRepository;
     private final QuotationDocumentRepository documentRepository;
     private final DocumentTypeRepository documentTypeRepository;
+    private final NativeQueries nativeQueries;
 
     /** Absent when quotecenter.s3.enabled is false — see S3Config. */
     private final Optional<S3Client> s3Client;
@@ -125,12 +127,40 @@ public class QuotationDocumentService {
                 .documentType(type)
                 .fileName(file.getOriginalFilename())
                 .storageUrl(storageUrl)
-                .uploadedByUserId(userId)
+                .uploadedByUserId(uploaderFor(userId))
                 .build());
 
         log.info("[QuotationDocumentService] voucher recorded quotationId={} key={} bytes={} stored={}",
                 quotationId, key, file.getSize(), storageUrl != null);
         return toResponse(document);
+    }
+
+    /**
+     * The uploader, or null when we cannot vouch for who it was.
+     *
+     * quotation_documents is the first table of ours with a real foreign key to
+     * `users`, and the screen sends the auth placeholder — CreateQuotePage's
+     * `const USER_ID = 1`, and there is no user 1; the lowest real id is 15. So
+     * every upload from the screen failed the constraint and answered 500,
+     * which reached the operator as a bare "no se pudo adjuntar".
+     *
+     * An id we cannot find is recorded as nobody rather than rejected. Who
+     * attached a voucher is worth knowing and is not worth losing the voucher
+     * over, and the column is nullable for exactly this reason. The same shape
+     * as QuoteEmailService.senderFor, which looks the address up and falls back
+     * rather than failing the send.
+     */
+    private Integer uploaderFor(Integer userId) {
+        if (userId == null) return null;
+        boolean exists = nativeQueries
+                .scalar("SELECT COUNT(*) FROM users WHERE id = ?", Long.class, userId)
+                .orElse(0L) > 0;
+        if (!exists) {
+            log.warn("[QuotationDocumentService] userId={} is not a known user, recording the"
+                    + " voucher without an uploader", userId);
+            return null;
+        }
+        return userId;
     }
 
     /**
