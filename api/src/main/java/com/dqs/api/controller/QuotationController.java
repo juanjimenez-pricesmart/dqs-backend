@@ -23,6 +23,7 @@ public class QuotationController {
 
     private final QuotationService quotationService;
     private final com.dqs.api.service.SeasonService seasonService;
+    private final com.dqs.api.service.QuoteEmailService quoteEmailService;
     private final com.dqs.api.repository.QuotationListRepository quotationListRepository;
     private final com.dqs.api.service.BankTransferNoticeService bankTransferNoticeService;
 
@@ -155,6 +156,24 @@ public class QuotationController {
                 comment == null ? 0 : comment.length());
         quotationService.updateComment(id, comment);
         return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Enviar la cotización por correo",
+               description = "Envía la cotización al correo del socio, con el PDF adjunto. Equivale a " +
+                             "enviarcorreo() del legacy, que abre orders/printDiv/{id}/2/{orden} en un popup y " +
+                             "manda el HTML incrustado; acá va el PDF y la respuesta dice si se envió. " +
+                             "userId es el usuario remitente, para que el socio pueda responderle al asesor. " +
+                             "Responde 400 si el envío está deshabilitado, si el socio no tiene correo válido, " +
+                             "o si el relay lo rechaza.")
+    @PostMapping("/{id}/email")
+    public ResponseEntity<java.util.Map<String, String>> sendByEmail(
+            @Parameter(description = "ID de la cotización") @PathVariable Long id,
+            @RequestBody(required = false) java.util.Map<String, Object> body) {
+        Object raw = body == null ? null : body.get("userId");
+        Integer userId = raw == null ? null : Integer.valueOf(raw.toString());
+        log.info("[QuotationController] POST /api/v1/quotations/{}/email userId={}", id, userId);
+        String recipient = quoteEmailService.send(id, userId);
+        return ResponseEntity.ok(java.util.Map.of("recipient", recipient));
     }
 
     @Operation(summary = "Temporadas disponibles",
