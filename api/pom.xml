@@ -57,6 +57,21 @@
 			<artifactId>spring-boot-starter-mail</artifactId>
 		</dependency>
 
+		<!-- Code 128 for the Callejas picking sheet. Hand-rolling the encoding
+		     is a hundred lines of code-set switching and a check digit, and a
+		     barcode that scans to the wrong number costs a warehouse more than
+		     a dependency does. -->
+		<dependency>
+			<groupId>com.google.zxing</groupId>
+			<artifactId>core</artifactId>
+			<version>3.5.3</version>
+		</dependency>
+		<dependency>
+			<groupId>com.google.zxing</groupId>
+			<artifactId>javase</artifactId>
+			<version>3.5.3</version>
+		</dependency>
+
 		<!-- S3, for the payment-voucher attachments. BOM-less: one artifact, and
 		     the version moves with a single edit rather than a managed block. -->
 		<dependency>
