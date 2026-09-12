@@ -347,6 +347,23 @@ class QuotationDocumentServiceTest {
     }
 
     @Test
+    @DisplayName("the 4Mb rule is ours to enforce, not the container's to pre-empt")
+    void theSizeRuleIsOursToEnforce() {
+        // spring.servlet.multipart.max-file-size sits deliberately above this
+        // one. When the two matched, a 5Mb file was rejected by the container
+        // before this method ran and answered a bare English 413, so the
+        // localized message below could never be shown — and a phone photo is
+        // the common way an operator goes over.
+        byte[] justOver = new byte[4 * 1024 * 1024 + 1];
+        assertThatThrownBy(() -> service().uploadVoucher(107L,
+                new MockMultipartFile("file", "foto.png", "image/png", justOver), null))
+                .isInstanceOf(VoucherUploadException.class)
+                .hasMessageContaining("4Mb");
+
+        verify(documentRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("the size limit is named in the message, in either language")
     void theSizeLimitIsNamed() {
         byte[] big = new byte[5 * 1024 * 1024];
