@@ -63,6 +63,7 @@ class QuotationControllerTest {
 
     @Mock private QuotationService quotationService;
     @Mock private com.dqs.api.service.SeasonService seasonService;
+    @Mock private com.dqs.api.service.QuoteEmailService quoteEmailService;
     @Mock private QuotationListRepository quotationListRepository;
     @Mock private BankTransferNoticeService bankTransferNoticeService;
 
@@ -73,7 +74,8 @@ class QuotationControllerTest {
     void setUp() {
         mvc = MockMvcBuilders
                 .standaloneSetup(new QuotationController(
-                        quotationService, seasonService, quotationListRepository, bankTransferNoticeService))
+                        quotationService, seasonService, quoteEmailService,
+                        quotationListRepository, bankTransferNoticeService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -322,6 +324,35 @@ class QuotationControllerTest {
         // to the screen as an outage and it would retry.
         mvc.perform(patch("/api/v1/quotations/107/items/700")
                         .contentType(MediaType.APPLICATION_JSON).content("{\"presetAmount\":1}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").exists());
+    }
+
+    @Test
+    @DisplayName("a sent quotation answers who received it")
+    void emailAnswersTheRecipient() throws Exception {
+        when(quoteEmailService.send(eq(107L), any())).thenReturn("socio@example.com");
+
+        mvc.perform(post("/api/v1/quotations/107/email")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"userId\":5836}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.recipient").value("socio@example.com"));
+
+        verify(quoteEmailService).send(107L, 5836);
+    }
+
+    @Test
+    @DisplayName("a quotation that cannot be emailed answers 400 with the reason")
+    void aFailedEmailIsABadRequest() throws Exception {
+        when(quoteEmailService.send(eq(107L), any()))
+                .thenThrow(new com.dqs.api.exception.EmailNotSentException(
+                        "The member has no valid email address on file"));
+
+        // Legacy opens a popup and closes it after three seconds unless the
+        // page happens to contain the word "error", so the advisor is never
+        // told. The screen has to be able to say what went wrong.
+        mvc.perform(post("/api/v1/quotations/107/email")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").exists());
     }

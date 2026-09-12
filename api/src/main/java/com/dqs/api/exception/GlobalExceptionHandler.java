@@ -38,6 +38,13 @@ public class GlobalExceptionHandler {
                 .body(Map.of("error", ex.getMessage()));
     }
 
+    @ExceptionHandler(EmailNotSentException.class)
+    public ResponseEntity<Map<String, String>> handleEmailNotSent(EmailNotSentException ex) {
+        log.warn("[GlobalExceptionHandler] {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", ex.getMessage()));
+    }
+
     @ExceptionHandler(InvalidSeasonException.class)
     public ResponseEntity<Map<String, String>> handleInvalidSeason(InvalidSeasonException ex) {
         log.warn("[GlobalExceptionHandler] {}", ex.getMessage());
