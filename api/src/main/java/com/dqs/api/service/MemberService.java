@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -106,14 +107,30 @@ public class MemberService {
         return getMember(membership);
     }
 
-    /** Legacy-compatible name search used when the operator enters a member name. */
+    /**
+     * Legacy-compatible name search used when the operator enters a member name.
+     *
+     * Mirrors Model_orders::datosmembresiadqs (Orders.php): spaces are turned into
+     * wildcards so that "Juan Carlos" finds "Juan de los Santos Carlos" — the same
+     * way the legacy app does with str_replace(" ", "%", $id).
+     *
+     * Each word is also % - escaped before substitution to prevent injection
+     * through a literal % or _ in the input.
+     */
     public List<Map<String, Object>> searchMembers(String name) {
         String term = name == null ? "" : name.trim();
         if (term.length() < 2) return List.of();
+        // Escape SQL wildcards in each word, then join with % so multi-word
+        // queries match names where the words appear in order with anything
+        // in between — legacy behaviour: str_replace(" ", "%", $param1).
+        String pattern = "%" + Arrays.stream(term.split("\\s+"))
+                .map(w -> w.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_"))
+                .collect(java.util.stream.Collectors.joining("%"))
+                + "%";
         return nativeQueries.list(
             "SELECT tarjeta, nombre, correo, ps_tienda_id, ps_pais_iso2 " +
             "FROM ps_socios_dqs20 WHERE nombre LIKE ? ORDER BY nombre LIMIT 50",
-            "%" + term.replace("%", "\\%") + "%");
+            pattern);
     }
 
     private static String trimmed(Object value) {
