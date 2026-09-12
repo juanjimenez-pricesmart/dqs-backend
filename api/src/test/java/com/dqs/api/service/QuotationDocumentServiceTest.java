@@ -9,6 +9,7 @@ import com.dqs.api.model.QuotationDocument;
 import com.dqs.api.repository.DocumentTypeRepository;
 import com.dqs.api.repository.QuotationDocumentRepository;
 import com.dqs.api.repository.QuotationRepository;
+import com.dqs.api.repository.support.NativeQueries;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -56,6 +59,7 @@ class QuotationDocumentServiceTest {
     @Mock private QuotationDocumentRepository documentRepository;
     @Mock private DocumentTypeRepository documentTypeRepository;
     @Mock private S3Client s3Client;
+    @Mock private NativeQueries nativeQueries;
 
     private static final DocumentType PROOF = DocumentType.builder()
             .id(4).code(DocumentType.PROOF_OF_PAYMENT).name("Proof of payment").build();
@@ -73,7 +77,8 @@ class QuotationDocumentServiceTest {
 
     private QuotationDocumentService service(Optional<S3Client> client) {
         QuotationDocumentService s = new QuotationDocumentService(
-                quotationRepository, documentRepository, documentTypeRepository, client, MESSAGES);
+                quotationRepository, documentRepository, documentTypeRepository, nativeQueries,
+                client, MESSAGES);
         ReflectionTestUtils.setField(s, "bucket", "dqs-quotes-dev");
         ReflectionTestUtils.setField(s, "region", "us-east-1");
         ReflectionTestUtils.setField(s, "maxBytes", 4L * 1024 * 1024);
@@ -90,6 +95,12 @@ class QuotationDocumentServiceTest {
 
     @BeforeEach
     void wire() {
+        // 5836 is a real user in dev; the screen's auth placeholder is 1, which
+        // is not — see uploaderFor.
+        when(nativeQueries.scalar(contains("FROM users"), eq(Long.class), eq(5836)))
+                .thenReturn(Optional.of(1L));
+        when(nativeQueries.scalar(contains("FROM users"), eq(Long.class), eq(1)))
+                .thenReturn(Optional.of(0L));
         // A real S3Utilities, not a mock: the point of the change under test is
         // that the SDK knows how to address a bucket whose name contains dots,
         // and a stubbed URL would assert nothing about that.
@@ -203,28 +214,57 @@ class QuotationDocumentServiceTest {
     }
 
     @Test
-    @DisplayName("with storage switched off the upload is refused, not silently dropped")
-    void storageOffRefusesTheUpload() {
-        // The bean does not exist when quotecenter.s3.enabled is false, so the
-        // service has to answer rather than fail at construction.
-        assertThatThrownBy(() -> service(Optional.empty()).uploadVoucher(107L, pdf("recibo.pdf"), null))
+    @DisplayName("with storage switched off the voucher is still recorded, with no URL")
+    void storageOffStillRecordsTheVoucher() {
+        // ENABLE_AWS_S3 is off in legacy's production environment with no date
+        // to enable it, and legacy accepts the file anyway — its controller
+        // reports `aws_disabled` to the browser as a success. Refusing here
+        // would be worse than legacy, not better: the close gate counts voucher
+        // rows, so no row means no sale can ever be closed.
+        QuotationDocumentResponse response =
+                service(Optional.empty()).uploadVoucher(107L, pdf("recibo.pdf"), null);
+
+        assertThat(response.getStorageUrl()).isNull();
+        assertThat(response.getFileName()).isEqualTo("recibo.pdf");
+        verify(documentRepository).save(any(QuotationDocument.class));
+    }
+
+    @Test
+    @DisplayName("an S3 failure records the voucher too, rather than blocking the sale")
+    void anS3FailureStillRecordsTheVoucher() {
+        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+                .thenThrow(S3Exception.builder().message("access denied").build());
+
+        QuotationDocumentResponse response = service().uploadVoucher(107L, pdf("recibo.pdf"), null);
+
+        // Logged at ERROR, because an unreachable bucket is not expected the
+        // way a disabled one is — but blocking a sale over it is not a trade
+        // this screen gets to make.
+        assertThat(response.getStorageUrl()).isNull();
+        verify(documentRepository).save(any(QuotationDocument.class));
+    }
+
+    @Test
+    @DisplayName("the file is validated even when nothing will be stored")
+    void validationStillAppliesWithoutStorage() {
+        // Otherwise the day storage is enabled we start keeping whatever was
+        // waved through in the meantime.
+        assertThatThrownBy(() -> service(Optional.empty()).uploadVoucher(107L,
+                new MockMultipartFile("file", "malo.exe", "application/x-msdownload", "MZ".getBytes()), null))
                 .isInstanceOf(VoucherUploadException.class);
 
         verify(documentRepository, never()).save(any());
     }
 
     @Test
-    @DisplayName("an S3 failure leaves no row claiming a file that is not there")
-    void anS3FailureSavesNothing() {
-        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
-                .thenThrow(S3Exception.builder().message("access denied").build());
+    @DisplayName("a voucher with no URL still satisfies the close gate")
+    void aVoucherWithNoUrlStillCounts() {
+        when(documentRepository.countByQuotation_IdAndDocumentType_Code(107L, DocumentType.PROOF_OF_PAYMENT))
+                .thenReturn(1L);
 
-        assertThatThrownBy(() -> service().uploadVoucher(107L, pdf("recibo.pdf"), null))
-                .isInstanceOf(VoucherUploadException.class);
-
-        // A row pointing at a missing object is worse than no row: the close
-        // gate would pass and the voucher would not exist.
-        verify(documentRepository, never()).save(any());
+        // hasVoucher counts rows, not stored objects — which is the whole point
+        // of writing the row when storage is off.
+        assertThat(service(Optional.empty()).hasVoucher(107L)).isTrue();
     }
 
     @Test
@@ -307,6 +347,23 @@ class QuotationDocumentServiceTest {
     }
 
     @Test
+    @DisplayName("the 4Mb rule is ours to enforce, not the container's to pre-empt")
+    void theSizeRuleIsOursToEnforce() {
+        // spring.servlet.multipart.max-file-size sits deliberately above this
+        // one. When the two matched, a 5Mb file was rejected by the container
+        // before this method ran and answered a bare English 413, so the
+        // localized message below could never be shown — and a phone photo is
+        // the common way an operator goes over.
+        byte[] justOver = new byte[4 * 1024 * 1024 + 1];
+        assertThatThrownBy(() -> service().uploadVoucher(107L,
+                new MockMultipartFile("file", "foto.png", "image/png", justOver), null))
+                .isInstanceOf(VoucherUploadException.class)
+                .hasMessageContaining("4Mb");
+
+        verify(documentRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("the size limit is named in the message, in either language")
     void theSizeLimitIsNamed() {
         byte[] big = new byte[5 * 1024 * 1024];
@@ -335,5 +392,26 @@ class QuotationDocumentServiceTest {
         // TLS, so the SDK falls back to path style. That is the whole reason
         // this is not a string concatenation any more.
         assertThat(url).startsWith("https://s3.amazonaws.com/");
+    }
+
+    @Test
+    @DisplayName("an unknown uploader is recorded as nobody, not as a failed upload")
+    void anUnknownUploaderIsRecordedAsNobody() {
+        // quotation_documents is the first table of ours with a real foreign
+        // key to users, and the screen sends CreateQuotePage's auth placeholder
+        // — `const USER_ID = 1`, and there is no user 1. Every upload from the
+        // screen failed the constraint and answered 500, which the operator saw
+        // as a bare "no se pudo adjuntar".
+        QuotationDocumentResponse response = service().uploadVoucher(107L, pdf("recibo.pdf"), 1);
+
+        assertThat(response.getUploadedByUserId()).isNull();
+        assertThat(response.getFileName()).isEqualTo("recibo.pdf");
+    }
+
+    @Test
+    @DisplayName("a real uploader is kept")
+    void aRealUploaderIsKept() {
+        assertThat(service().uploadVoucher(107L, pdf("recibo.pdf"), 5836).getUploadedByUserId())
+                .isEqualTo(5836);
     }
 }
