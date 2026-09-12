@@ -41,7 +41,15 @@ public class QuotationDocument {
     @Column(name = "file_name", length = 255)
     private String fileName;
 
-    @Column(name = "storage_url", nullable = false, length = 500)
+    /**
+     * Where the file landed, or NULL when it did not.
+     *
+     * Storage can be switched off — ENABLE_AWS_S3 is false in legacy's
+     * production environment with no date to enable it — and an attachment is
+     * still accepted then, exactly as legacy accepts it. A row with no URL says
+     * a voucher was provided and validated and the bytes are not ours to serve.
+     */
+    @Column(name = "storage_url", length = 500)
     private String storageUrl;
 
     /** A users.id, which is INT in the live schema — not BIGINT as the schema

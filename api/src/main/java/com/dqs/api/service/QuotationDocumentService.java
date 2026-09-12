@@ -33,12 +33,30 @@ import java.util.Set;
  *
  * Legacy uploads it from the browser to orders/upload_s3 at the moment the
  * quote is submitted (`copiars3()`, edit.php:6597), with the request made
- * synchronously — `async: false` — so the page blocks until S3 answers, and
- * with the upload's own errors logged to the console and otherwise ignored:
- * createquote() proceeds whether or not the file made it. Here the upload is
- * its own request, made when the operator picks the file, and a failure is a
- * failure. The close gate then asks whether a voucher exists rather than
- * whether one was selected in this browser session.
+ * synchronously — `async: false` — and its errors logged to the console and
+ * otherwise ignored: createquote() proceeds whether or not the file made it.
+ * Here the upload is its own request, made when the operator picks the file,
+ * and the close gate asks whether a voucher exists rather than whether one was
+ * selected in this browser session.
+ *
+ * <h2>When storage is unavailable</h2>
+ *
+ * It usually is. ENABLE_AWS_S3 is off in legacy's production environment and
+ * there is no date to enable it, so today the whole feature stores nothing
+ * anywhere: AWSService answers `aws_disabled`, the controller reports that to
+ * the browser as a success, and the quote closes.
+ *
+ * The first version of this refused the upload outright in that case, which
+ * was worse than legacy rather than better — the close gate counts voucher
+ * rows, so with storage off no row could be written and <em>no sale could ever
+ * be closed</em>. The file is still validated, the row is still written, and
+ * storage_url is left NULL. The flow behaves as legacy's does; unlike legacy,
+ * afterwards we can tell which quotations were closed against a voucher whose
+ * bytes nobody kept.
+ *
+ * A storage failure at runtime is treated the same way and logged at ERROR.
+ * Blocking a sale because a bucket is unreachable is not a trade this screen
+ * gets to make.
  */
 @Slf4j
 @Service
@@ -83,9 +101,6 @@ public class QuotationDocumentService {
         Locale locale = ClubMarketingFooter.localeFor(
                 quotation.getStoreId() == null ? 0 : quotation.getStoreId());
 
-        S3Client client = s3Client.orElseThrow(
-                () -> new VoucherUploadException(msg("voucher.error.storage-disabled", locale)));
-
         validate(file, locale);
 
         DocumentType type = documentTypeRepository.findByCode(DocumentType.PROOF_OF_PAYMENT)
@@ -103,6 +118,34 @@ public class QuotationDocumentService {
         String key = "quotes/order_" + quotationId + "/quote_" + quotationId
                 + "_payment_voucher" + suffix + "." + extensionOf(file);
 
+        String storageUrl = store(file, key, quotationId);
+
+        QuotationDocument document = documentRepository.save(QuotationDocument.builder()
+                .quotation(quotation)
+                .documentType(type)
+                .fileName(file.getOriginalFilename())
+                .storageUrl(storageUrl)
+                .uploadedByUserId(userId)
+                .build());
+
+        log.info("[QuotationDocumentService] voucher recorded quotationId={} key={} bytes={} stored={}",
+                quotationId, key, file.getSize(), storageUrl != null);
+        return toResponse(document);
+    }
+
+    /**
+     * Puts the file in S3 and answers where it landed, or null when it did not.
+     *
+     * Never throws. The row is written either way, because refusing the
+     * attachment would stop the sale — see the note on this class.
+     */
+    private String store(MultipartFile file, String key, Long quotationId) {
+        if (s3Client.isEmpty()) {
+            log.warn("[QuotationDocumentService] storage disabled, voucher accepted but not stored"
+                    + " quotationId={} name={}", quotationId, file.getOriginalFilename());
+            return null;
+        }
+        S3Client client = s3Client.get();
         try {
             client.putObject(
                     PutObjectRequest.builder()
@@ -111,23 +154,14 @@ public class QuotationDocumentService {
                             .contentType(file.getContentType())
                             .build(),
                     RequestBody.fromBytes(file.getBytes()));
+            return urlFor(client, key);
         } catch (IOException | RuntimeException e) {
-            log.error("[QuotationDocumentService] upload failed quotationId={} key={}: {}",
-                    quotationId, key, e.getMessage());
-            throw new VoucherUploadException(msg("voucher.error.not-stored", locale), e);
+            // Loud, because this one is not expected the way a disabled bucket
+            // is — but still not a reason to block the close.
+            log.error("[QuotationDocumentService] storage failed, voucher accepted but not stored"
+                    + " quotationId={} key={}: {}", quotationId, key, e.getMessage());
+            return null;
         }
-
-        QuotationDocument document = documentRepository.save(QuotationDocument.builder()
-                .quotation(quotation)
-                .documentType(type)
-                .fileName(file.getOriginalFilename())
-                .storageUrl(urlFor(client, key))
-                .uploadedByUserId(userId)
-                .build());
-
-        log.info("[QuotationDocumentService] voucher stored quotationId={} key={} bytes={}",
-                quotationId, key, file.getSize());
-        return toResponse(document);
     }
 
     // ── Read ──────────────────────────────────────────────────────────────────

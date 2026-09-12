@@ -203,28 +203,57 @@ class QuotationDocumentServiceTest {
     }
 
     @Test
-    @DisplayName("with storage switched off the upload is refused, not silently dropped")
-    void storageOffRefusesTheUpload() {
-        // The bean does not exist when quotecenter.s3.enabled is false, so the
-        // service has to answer rather than fail at construction.
-        assertThatThrownBy(() -> service(Optional.empty()).uploadVoucher(107L, pdf("recibo.pdf"), null))
+    @DisplayName("with storage switched off the voucher is still recorded, with no URL")
+    void storageOffStillRecordsTheVoucher() {
+        // ENABLE_AWS_S3 is off in legacy's production environment with no date
+        // to enable it, and legacy accepts the file anyway — its controller
+        // reports `aws_disabled` to the browser as a success. Refusing here
+        // would be worse than legacy, not better: the close gate counts voucher
+        // rows, so no row means no sale can ever be closed.
+        QuotationDocumentResponse response =
+                service(Optional.empty()).uploadVoucher(107L, pdf("recibo.pdf"), null);
+
+        assertThat(response.getStorageUrl()).isNull();
+        assertThat(response.getFileName()).isEqualTo("recibo.pdf");
+        verify(documentRepository).save(any(QuotationDocument.class));
+    }
+
+    @Test
+    @DisplayName("an S3 failure records the voucher too, rather than blocking the sale")
+    void anS3FailureStillRecordsTheVoucher() {
+        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+                .thenThrow(S3Exception.builder().message("access denied").build());
+
+        QuotationDocumentResponse response = service().uploadVoucher(107L, pdf("recibo.pdf"), null);
+
+        // Logged at ERROR, because an unreachable bucket is not expected the
+        // way a disabled one is — but blocking a sale over it is not a trade
+        // this screen gets to make.
+        assertThat(response.getStorageUrl()).isNull();
+        verify(documentRepository).save(any(QuotationDocument.class));
+    }
+
+    @Test
+    @DisplayName("the file is validated even when nothing will be stored")
+    void validationStillAppliesWithoutStorage() {
+        // Otherwise the day storage is enabled we start keeping whatever was
+        // waved through in the meantime.
+        assertThatThrownBy(() -> service(Optional.empty()).uploadVoucher(107L,
+                new MockMultipartFile("file", "malo.exe", "application/x-msdownload", "MZ".getBytes()), null))
                 .isInstanceOf(VoucherUploadException.class);
 
         verify(documentRepository, never()).save(any());
     }
 
     @Test
-    @DisplayName("an S3 failure leaves no row claiming a file that is not there")
-    void anS3FailureSavesNothing() {
-        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
-                .thenThrow(S3Exception.builder().message("access denied").build());
+    @DisplayName("a voucher with no URL still satisfies the close gate")
+    void aVoucherWithNoUrlStillCounts() {
+        when(documentRepository.countByQuotation_IdAndDocumentType_Code(107L, DocumentType.PROOF_OF_PAYMENT))
+                .thenReturn(1L);
 
-        assertThatThrownBy(() -> service().uploadVoucher(107L, pdf("recibo.pdf"), null))
-                .isInstanceOf(VoucherUploadException.class);
-
-        // A row pointing at a missing object is worse than no row: the close
-        // gate would pass and the voucher would not exist.
-        verify(documentRepository, never()).save(any());
+        // hasVoucher counts rows, not stored objects — which is the whole point
+        // of writing the row when storage is off.
+        assertThat(service(Optional.empty()).hasVoucher(107L)).isTrue();
     }
 
     @Test
