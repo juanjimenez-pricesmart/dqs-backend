@@ -1,5 +1,23 @@
 -- ---------------------------------------------------------------------------
+-- !! DO NOT RUN WITHOUT REVIEWING THE WARNING BELOW !!
+--
 -- Migration: import staff-edited member contact overrides from legacy ps_socios
+--
+-- WARNING
+-- -------
+-- ps_socios stores TWO kinds of data that cannot be distinguished by the WHERE
+-- clause below:
+--   1. Staff corrections — explicit edits via the member-contact modal
+--   2. Business API snapshots — cached at quote-creation time from the API
+--
+-- Running this script copies both kinds. Snapshots from 2024-2026 would become
+-- permanent overrides and freeze stale addresses/emails in DQS, hiding any
+-- subsequent changes made in the Business API.
+--
+-- PREFERRED APPROACH (already implemented in MemberService.applyLegacyFallback):
+-- DQS reads ps_socios as a live fallback at request time instead of migrating.
+-- This shows the same data as legacy without freezing anything. Only run this
+-- script if you have a reliable way to isolate genuine staff corrections.
 --
 -- Context
 -- -------

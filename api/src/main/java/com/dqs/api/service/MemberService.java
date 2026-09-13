@@ -38,22 +38,52 @@ public class MemberService {
             log.error("[MemberService] Error parsing member response: {}", e.getMessage());
             throw new RuntimeException("Error consultando membresía: " + e.getMessage());
         }
+        applyLegacyFallback(membership, member);
         return applyContactOverride(membership, member);
     }
 
     /**
-     * Overlays the staff correction on top of the Business API answer, which is
-     * exactly what Orders::buscarmembresia does after reading ps_socios
-     * (Orders.php:1516-1521): when a local row exists, its four fields win.
+     * Overlays ps_socios on the Business API response — the same overlay
+     * Orders::buscarmembresia applies (Orders.php:1516-1521).
      *
-     * The four keys are the API's own — addressLine1, cellPhone, email,
-     * businessName — so the caller cannot tell a corrected field from an
-     * original one, and nothing downstream needs to know about overrides.
+     * ps_socios holds both genuine staff corrections and API snapshots written
+     * at quote-creation time; the two cannot be distinguished at read time.
+     * Rather than migrating that data into member_contact_overrides (which
+     * would freeze stale snapshots as permanent overrides), we read ps_socios
+     * here as a live fallback so DQS shows the same values the legacy app shows.
      *
-     * A stored empty string overwrites too, and deliberately: the operator who
-     * clears a wrong phone number expects it to stay cleared. Only a column
-     * that was never written (null) leaves the API value alone.
+     * Only non-blank values win — an empty string in ps_socios is treated as
+     * absent and leaves the API value in place.
+     *
+     * member_contact_overrides (applied afterward in applyContactOverride) take
+     * priority over both this fallback and the API: a correction saved through
+     * DQS is always the highest-confidence value.
      */
+    private void applyLegacyFallback(String membership, Map<String, Object> member) {
+        if (member == null) return;
+        try {
+            List<Map<String, Object>> rows = nativeQueries.list(
+                "SELECT addressLine1, cellPhone, email, businessName " +
+                "FROM ps_socios WHERE membership = ? LIMIT 1",
+                membership);
+            if (rows.isEmpty()) return;
+            Map<String, Object> row = rows.get(0);
+            overlayIfPresent(member, "addressLine1", row.get("addressLine1"));
+            overlayIfPresent(member, "cellPhone",    row.get("cellPhone"));
+            overlayIfPresent(member, "email",        row.get("email"));
+            overlayIfPresent(member, "businessName", row.get("businessName"));
+            log.info("[MemberService] legacy ps_socios fallback applied membership={}", membership);
+        } catch (Exception e) {
+            log.warn("[MemberService] ps_socios fallback failed membership={}: {}", membership, e.getMessage());
+        }
+    }
+
+    private static void overlayIfPresent(Map<String, Object> target, String key, Object value) {
+        if (value != null && !value.toString().isBlank()) {
+            target.put(key, value);
+        }
+    }
+
     private Map<String, Object> applyContactOverride(String membership, Map<String, Object> member) {
         if (member == null) return null;
         overrideRepository.findByMembershipNumber(membership).ifPresent(o -> {
