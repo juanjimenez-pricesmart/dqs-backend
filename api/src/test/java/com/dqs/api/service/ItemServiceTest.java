@@ -190,12 +190,31 @@ class ItemServiceTest {
     }
 
     @Test
-    @DisplayName("search encodes the spaces in the description")
+    @DisplayName("search encodes spaces as %20")
     void searchEncodesSpaces() {
         when(businessApiClient.get("/api/getSearch/club/6101/description/coca%20cola"))
             .thenReturn("[]");
 
         service().searchItems(6101, "coca cola");
+    }
+
+    @Test
+    @DisplayName("search strips diacritics so 'sandia' finds 'sandía'")
+    void searchStripsAccents() {
+        when(businessApiClient.get("/api/getSearch/club/6101/description/sandia"))
+            .thenReturn("[]");
+
+        service().searchItems(6101, "sandía");
+        service().searchItems(6101, "sandia");
+    }
+
+    @Test
+    @DisplayName("search strips accents and encodes spaces together")
+    void searchStripsAccentsAndEncodesSpaces() {
+        when(businessApiClient.get("/api/getSearch/club/6101/description/pollo%20a%20la%20brasa"))
+            .thenReturn("[]");
+
+        service().searchItems(6101, "pollo á la brása");
     }
 
     @Test

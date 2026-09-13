@@ -7,6 +7,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -118,7 +121,9 @@ public class ItemService {
     @SuppressWarnings("unchecked")
     public Object searchItems(Integer clubId, String description) {
         log.info("[ItemService] searchItems clubId={} description={}", clubId, description);
-        String encoded = description.trim().replace(" ", "%20");
+        String normalized = Normalizer.normalize(description.trim(), Normalizer.Form.NFD)
+                .replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
+        String encoded = URLEncoder.encode(normalized, StandardCharsets.UTF_8).replace("+", "%20");
         String response = businessApiClient.get("/api/getSearch/club/" + clubId + "/description/" + encoded);
         try {
             // The business API may return an array or an object
