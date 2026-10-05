@@ -6,6 +6,7 @@ import com.dqs.api.exception.InvalidSeasonException;
 import com.dqs.api.exception.QuotationAlreadySubmittedException;
 import com.dqs.api.util.MapUtils;
 import com.dqs.api.util.SpecialItems;
+import com.dqs.api.util.QuoteTypes;
 import com.dqs.api.exception.QuotationNotFoundException;
 import com.dqs.api.model.*;
 import com.dqs.api.repository.QuotationItemRepository;
@@ -677,6 +678,44 @@ public class QuotationService {
                 .stream()
                 .map(this::toItemResponse)
                 .collect(Collectors.toList());
+    }
+
+    // ── Move to Front Desk ────────────────────────────────────────────────
+
+    /**
+     * Reclassifies a quotation as fulfilled at the counter — legacy's
+     * {@code orders/move2frontdesk}, which is one
+     * {@code UPDATE orders SET quote_type = 1} with no guard of any kind
+     * (Orders.php:623).
+     *
+     * It exists because of the OMS checklist: a membership that is blocked,
+     * lapsed, or missing an email or an address cannot have an order raised
+     * against it, so the quotation goes back to the counter instead.
+     *
+     * <p><b>One deliberate difference, agreed with the user.</b> Legacy fires
+     * this from inside {@code chechklistorder()} the moment the checklist
+     * fails — merely opening the modal over a quotation with a dead card
+     * reclassifies it, nothing confirmed and no way back from that screen.
+     * The endpoint does the same write; what changes is that the caller is an
+     * explicit button. A read that quietly mutates is a side effect nobody can
+     * see coming, and this one cannot be undone from the UI.
+     *
+     * <p>No status check, because legacy has none. The path that reaches it
+     * only exists for a closed quotation, and on a pending one the value is
+     * overwritten by {@link #closeQuotation} anyway, so a guard would only add
+     * a way to fail.
+     */
+    @Transactional
+    public QuotationResponse moveToFrontDesk(Long id) {
+        Quotation quotation = findOrThrow(id);
+
+        QuotationPayment payment = ensurePayment(quotation);
+        Integer previous = payment.getQuoteTypeId();
+        payment.setQuoteTypeId(QuoteTypes.FRONT_DESK);
+
+        log.info("[QuotationService] moveToFrontDesk id={} quoteTypeId {} -> {}",
+                id, previous, QuoteTypes.FRONT_DESK);
+        return toResponse(quotationRepository.save(quotation));
     }
 
     // ── Close ─────────────────────────────────────────────────────────────
