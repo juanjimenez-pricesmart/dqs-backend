@@ -444,6 +444,19 @@ class QuotationControllerTest {
                 .andExpect(jsonPath("$.expiryDate").value("2026-10-22"));
     }
 
+    @Test
+    @DisplayName("moving to Front Desk answers the quotation carrying its new type")
+    void moveToFrontDeskReturnsTheNewType() throws Exception {
+        when(quotationService.moveToFrontDesk(107L)).thenReturn(
+                QuotationResponse.builder().id(107L).quoteTypeId(1).build());
+
+        // The checklist re-reads the quotation after the press, so the new type
+        // has to come back in the body for the modal to stop offering the button.
+        mvc.perform(patch("/api/v1/quotations/107/move-to-front-desk"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.quoteTypeId").value(1));
+    }
+
     // ── Items ─────────────────────────────────────────────────────────────
 
     @Test

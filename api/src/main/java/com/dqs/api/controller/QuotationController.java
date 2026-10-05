@@ -213,6 +213,18 @@ public class QuotationController {
         return ResponseEntity.ok(quotationService.extendExpiry(id));
     }
 
+    @Operation(summary = "Mover la cotización a Front Desk",
+               description = "Deja quote_type_id en 1 (Front Desk). Equivale a orders/move2frontdesk del legacy, " +
+                             "con una diferencia: legacy lo dispara solo cuando falla el checklist de OMS, de modo " +
+                             "que abrir el modal ya reclasifica la cotización. Acá lo llama un botón explícito. " +
+                             "Sin validar el estado, igual que legacy.")
+    @PatchMapping("/{id}/move-to-front-desk")
+    public ResponseEntity<QuotationResponse> moveToFrontDesk(
+            @Parameter(description = "ID de la cotización") @PathVariable Long id) {
+        log.info("[QuotationController] PATCH /api/v1/quotations/{}/move-to-front-desk", id);
+        return ResponseEntity.ok(quotationService.moveToFrontDesk(id));
+    }
+
     @Operation(summary = "Listar ítems", description = "Retorna todos los ítems de la cotización ordenados por productId")
     @GetMapping("/{id}/items")
     public ResponseEntity<List<QuotationItemResponse>> getItems(

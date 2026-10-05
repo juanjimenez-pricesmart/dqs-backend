@@ -1604,6 +1604,77 @@ class QuotationServiceTest {
         verify(quotationRepository, never()).save(any(Quotation.class));
     }
 
+    // ── Mover a Front Desk ────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("moving to Front Desk writes quote_type_id = 1 on the payment row")
+    void moveToFrontDeskSetsTheQuoteType() {
+        Quotation q = quotation(3);
+        q.setPayment(QuotationPayment.builder().quotation(q)
+                .quoteTypeId(2).paidStatus(1).serviceId(0).paymentMethodId("110").build());
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(q));
+        repoReturnsSelf();
+
+        QuotationResponse response = service().moveToFrontDesk(107L);
+
+        assertThat(response.getQuoteTypeId()).isEqualTo(1);
+        ArgumentCaptor<Quotation> saved = ArgumentCaptor.forClass(Quotation.class);
+        verify(quotationRepository).save(saved.capture());
+        assertThat(saved.getValue().getPayment().getQuoteTypeId()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("nothing else on the payment row is disturbed")
+    void moveToFrontDeskLeavesTheRestOfThePaymentAlone() {
+        Quotation q = quotation(3);
+        q.setPayment(QuotationPayment.builder().quotation(q)
+                .quoteTypeId(2).paidStatus(1).serviceId(0)
+                .paymentMethodId("110").paymentNumber("201888600").quoteNo("SO-9001").build());
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(q));
+        repoReturnsSelf();
+
+        service().moveToFrontDesk(107L);
+
+        QuotationPayment after = q.getPayment();
+        assertThat(after.getPaymentMethodId()).isEqualTo("110");
+        assertThat(after.getPaymentNumber()).isEqualTo("201888600");
+        // The OMS order number stays. A quotation that already reached OMS and
+        // is being reclassified has not stopped having one.
+        assertThat(after.getQuoteNo()).isEqualTo("SO-9001");
+    }
+
+    @Test
+    @DisplayName("a quotation with no payment row yet gets one, rather than a null dereference")
+    void moveToFrontDeskCreatesThePaymentRowWhenMissing() {
+        Quotation q = quotation(1);
+        q.setPayment(null);
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(q));
+        repoReturnsSelf();
+
+        assertThat(service().moveToFrontDesk(107L).getQuoteTypeId()).isEqualTo(1);
+        assertThat(q.getPayment()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("the status is not checked — legacy's move2frontdesk has no guard either")
+    void moveToFrontDeskIgnoresTheStatus() {
+        Quotation pending = quotation(1);
+        when(quotationRepository.findById(107L)).thenReturn(Optional.of(pending));
+        repoReturnsSelf();
+
+        assertThat(service().moveToFrontDesk(107L).getQuoteTypeId()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("moving a quotation that does not exist is a 404, not a silent no-op")
+    void moveToFrontDeskOnAMissingQuotationThrows() {
+        when(quotationRepository.findById(404L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service().moveToFrontDesk(404L))
+                .isInstanceOf(QuotationNotFoundException.class);
+        verify(quotationRepository, never()).save(any(Quotation.class));
+    }
+
     // ── Gift card: pricing a line from its preset amounts ─────────────────
 
     private QuotationItem giftCardLine(Quotation q) {
